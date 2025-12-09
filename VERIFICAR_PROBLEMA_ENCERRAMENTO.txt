@@ -1,0 +1,63 @@
+# ============================================
+# VERIFICAR POR QUE SERVIDOR ESTÁ ENCERRANDO
+# ============================================
+
+# PROGRESSO:
+# ✅ .env corrigido
+# ✅ Navegador inicializado em headless
+# ✅ Scraping iniciado
+# ⚠️ Servidor encerrando logo após iniciar
+
+# ============================================
+# PASSO 1: Verificar logs completos
+# ============================================
+pm2 logs saitec-automation --lines 100 --err
+
+# ============================================
+# PASSO 2: Verificar se há erros não mostrados
+# ============================================
+tail -100 /root/.pm2/logs/saitec-automation-error.log
+
+# ============================================
+# PASSO 3: Testar endpoint novamente
+# ============================================
+curl -v http://localhost:3000/shop/top-products?source=kalodata&limit=10
+
+# Aguardar alguns segundos e verificar logs:
+pm2 logs saitec-automation --lines 50
+
+# ============================================
+# PASSO 4: Verificar status do PM2
+# ============================================
+pm2 status
+pm2 info saitec-automation
+
+# ============================================
+# PASSO 5: Verificar conexão MySQL
+# ============================================
+mysql -u saitec_user -p'Saitec2025@MySQL!' -e "SELECT 1;"
+
+# Se der erro, verificar credenciais no .env:
+cat .env | grep DB_
+
+# ============================================
+# PASSO 6: Testar scraping manualmente
+# ============================================
+cd /root/saitec-automation
+node -e "require('dotenv').config(); const { scrapeKalodataTopProducts } = require('./src/scrapers/kalodataScraper'); scrapeKalodataTopProducts({ limit: 5 }).then(r => console.log('Produtos:', r.length)).catch(e => console.error('Erro:', e.message));"
+
+# ============================================
+# SE O SERVIDOR CONTINUAR ENCERRANDO
+# ============================================
+
+# Pode ser timeout ou erro não capturado
+# Verificar se há algum processo matando o servidor:
+ps aux | grep node
+ps aux | grep pm2
+
+# Verificar memória:
+free -h
+
+# Verificar se há espaço em disco:
+df -h
+

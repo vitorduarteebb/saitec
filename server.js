@@ -909,8 +909,11 @@ app.get('/shop/top-products', apiLimiter, async (req, res) => {
         logger.info(`[API] Produtos salvos: ${saveResult.inserted} inseridos, ${saveResult.skipped} duplicados ignorados`);
       } catch (error) {
         logger.warn(`[API] Erro ao salvar produtos no banco: ${error.message}`);
+        logger.error(`[API] Stack: ${error.stack}`);
         // Continuar mesmo se falhar ao salvar
       }
+    } else {
+      logger.warn(`[API] ⚠️ Nenhum produto coletado. Verifique logs do scraper para mais detalhes.`);
     }
 
     res.json({
@@ -918,14 +921,18 @@ app.get('/shop/top-products', apiLimiter, async (req, res) => {
       count: products.length,
       data: products,
       source: source,
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
+      message: products.length === 0 ? 'Nenhum produto encontrado. Verifique se as credenciais do Kalodata estão configuradas no arquivo .env (KALODATA_EMAIL e KALODATA_PASSWORD) e se o primeiro login foi realizado.' : undefined
     });
   } catch (error) {
     logger.error(`[API] Erro ao buscar produtos: ${error.message}`);
+    logger.error(`[API] Stack: ${error.stack}`);
     res.status(500).json({
       success: false,
       error: 'Erro ao buscar produtos',
-      message: error.message
+      message: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : 'Verifique os logs do servidor para mais detalhes',
+      hint: 'Verifique se as credenciais do Kalodata estão configuradas no arquivo .env (KALODATA_EMAIL e KALODATA_PASSWORD)'
     });
   }
 });

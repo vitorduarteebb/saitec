@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS tiktok_shop_products (
   conversion_rate VARCHAR(20) NULL COMMENT 'Taxa de conversão do criador (ex: 55.50%)',
   product_url TEXT NULL COMMENT 'URL do produto no TikTok Shop',
   image_url TEXT NULL COMMENT 'URL da imagem do produto',
-  rank INT UNSIGNED NULL COMMENT 'Posição no ranking',
+  `rank` INT UNSIGNED NULL COMMENT 'Posição no ranking',
   category VARCHAR(100) NULL COMMENT 'Categoria do produto',
   country VARCHAR(10) NULL COMMENT 'País (ex: BR)',
   collected_at DATETIME NOT NULL COMMENT 'Data/hora da coleta',
@@ -29,9 +29,9 @@ CREATE TABLE IF NOT EXISTS tiktok_shop_products (
   INDEX idx_source (source),
   INDEX idx_collected_at (collected_at),
   INDEX idx_product_id (product_id),
-  INDEX idx_rank (rank),
+  INDEX idx_rank (`rank`),
   INDEX idx_country (country),
   INDEX idx_category (category),
-  UNIQUE KEY unique_product_day (product_id, DATE(collected_at))
+  INDEX idx_product_date (product_id, collected_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Produtos TikTok Shop coletados';
 

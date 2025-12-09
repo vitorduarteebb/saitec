@@ -155,9 +155,11 @@ ORDER BY data DESC;
 
 ## 🚀 Deploy em VPS
 
-Para instalação em servidor VPS, consulte o guia completo:
+Para instalação em servidor VPS, consulte os guias:
 
-📖 **[DEPLOY_VPS.md](DEPLOY_VPS.md)** - Guia detalhado de deploy
+📖 **[DEPLOY_VPS_HOSTINGER.md](DEPLOY_VPS_HOSTINGER.md)** - Guia completo para VPS Hostinger  
+⚡ **[DEPLOY_RAPIDO.md](DEPLOY_RAPIDO.md)** - Comandos rápidos de deploy  
+📚 **[DEPLOY_VPS.md](DEPLOY_VPS.md)** - Guia genérico de deploy
 
 ### Resumo Rápido
 

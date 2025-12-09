@@ -1,0 +1,66 @@
+# ============================================
+# SOLUÇÃO RÁPIDA: Missing X server
+# ============================================
+
+# PROBLEMA: 
+# error: Missing X server or $DISPLAY
+# O Puppeteer não consegue abrir navegador em modo visível sem X server
+
+# ============================================
+# SOLUÇÃO 1: Usar Modo Headless (MAIS SIMPLES)
+# ============================================
+
+cd /root/saitec-automation
+nano .env
+
+# Mude esta linha:
+KALODATA_HEADLESS=true
+
+# Salvar: Ctrl+O, Enter, Ctrl+X
+
+pm2 restart saitec-automation
+pm2 logs saitec-automation --lines 30
+
+# ============================================
+# SOLUÇÃO 2: Instalar Xvfb (Se precisar modo visível)
+# ============================================
+
+# Instalar Xvfb
+apt update
+apt install -y xvfb
+
+# Configurar DISPLAY no .env
+nano .env
+# Adicione:
+# DISPLAY=:99
+
+# Criar script para iniciar Xvfb antes do servidor
+cat > /root/saitec-automation/start-with-xvfb.sh << 'EOF'
+#!/bin/bash
+# Inicia Xvfb em background
+Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+export DISPLAY=:99
+# Aguarda Xvfb iniciar
+sleep 2
+# Inicia o servidor
+node server.js
+EOF
+
+chmod +x /root/saitec-automation/start-with-xvfb.sh
+
+# Parar PM2 atual
+pm2 delete saitec-automation
+
+# Iniciar com Xvfb
+pm2 start /root/saitec-automation/start-with-xvfb.sh --name saitec-automation
+pm2 save
+
+# ============================================
+# RECOMENDAÇÃO: Use Solução 1 (Headless)
+# ============================================
+# O modo headless funciona perfeitamente para scraping
+# Não precisa de interface gráfica
+
+# Testar:
+curl http://localhost:3000/shop/top-products?source=kalodata&limit=10
+

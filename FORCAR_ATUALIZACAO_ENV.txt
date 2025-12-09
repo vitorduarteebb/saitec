@@ -1,0 +1,62 @@
+# ============================================
+# FORÇAR PM2 A RECARREGAR VARIÁVEIS DE AMBIENTE
+# ============================================
+
+# PROBLEMA: PM2 não está lendo o novo .env
+# Logs ainda mostram: "Modo headless=false"
+
+# ============================================
+# PASSO 1: Verificar se .env foi alterado
+# ============================================
+cat /root/saitec-automation/.env | grep KALODATA_HEADLESS
+
+# Deve mostrar: KALODATA_HEADLESS=true
+
+# ============================================
+# PASSO 2: Parar e Recriar Processo PM2
+# ============================================
+cd /root/saitec-automation
+
+# Parar processo atual
+pm2 delete saitec-automation
+
+# Iniciar novamente (isso força leitura do .env)
+pm2 start server.js --name saitec-automation --update-env
+
+# OU usar o comando completo:
+pm2 start server.js --name saitec-automation --update-env --env production
+
+# Salvar configuração
+pm2 save
+
+# ============================================
+# PASSO 3: Verificar Logs
+# ============================================
+pm2 logs saitec-automation --lines 30
+
+# Agora deve mostrar: "Modo headless=true"
+
+# ============================================
+# PASSO 4: Testar
+# ============================================
+curl http://localhost:3000/shop/top-products?source=kalodata&limit=10
+
+# ============================================
+# SE AINDA MOSTRAR headless=false
+# ============================================
+
+# Verificar se o código foi atualizado:
+cd /root/saitec-automation
+git log --oneline -5
+
+# Verificar se o arquivo foi atualizado:
+grep -n "headlessMode" src/scrapers/kalodataScraper.js | head -5
+
+# Se necessário, fazer pull novamente:
+git pull origin main
+
+# E reiniciar:
+pm2 delete saitec-automation
+pm2 start server.js --name saitec-automation --update-env
+pm2 save
+

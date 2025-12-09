@@ -1,0 +1,82 @@
+# ============================================
+# RESOLVER: Missing X server or $DISPLAY
+# ============================================
+
+# PROBLEMA: Puppeteer não consegue abrir navegador em modo visível
+# SOLUÇÃO: Instalar Xvfb (X Virtual Framebuffer)
+
+# ============================================
+# PASSO 1: Instalar Xvfb
+# ============================================
+apt update
+apt install -y xvfb x11-xkb-utils xfonts-100dpi xfonts-75dpi xfonts-scalable xfonts-cyrillic x11-apps
+
+# ============================================
+# PASSO 2: Instalar dependências adicionais
+# ============================================
+apt install -y libxss1 libgconf-2-4 libxrandr2 libasound2 libpangocairo-1.0-0 libatk1.0-0 libcairo-gobject2 libgtk-3-0 libgdk-pixbuf2.0-0
+
+# ============================================
+# PASSO 3: Configurar DISPLAY no .env
+# ============================================
+cd /root/saitec-automation
+nano .env
+
+# Adicione esta linha:
+# DISPLAY=:99
+
+# Salvar: Ctrl+O, Enter, Ctrl+X
+
+# ============================================
+# PASSO 4: Criar script de inicialização
+# ============================================
+cat > /root/saitec-automation/start-xvfb.sh << 'EOF'
+#!/bin/bash
+# Inicia Xvfb em background
+Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+export DISPLAY=:99
+EOF
+
+chmod +x /root/saitec-automation/start-xvfb.sh
+
+# ============================================
+# PASSO 5: Modificar PM2 para iniciar com Xvfb
+# ============================================
+pm2 delete saitec-automation
+
+# Criar script wrapper
+cat > /root/saitec-automation/start-server.sh << 'EOF'
+#!/bin/bash
+export DISPLAY=:99
+Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+node server.js
+EOF
+
+chmod +x /root/saitec-automation/start-server.sh
+
+# Iniciar com PM2 usando o wrapper
+pm2 start /root/saitec-automation/start-server.sh --name saitec-automation
+pm2 save
+
+# ============================================
+# ALTERNATIVA MAIS SIMPLES: Usar Headless
+# ============================================
+# Se não quiser instalar Xvfb, simplesmente use headless:
+
+cd /root/saitec-automation
+nano .env
+
+# Mude:
+# KALODATA_HEADLESS=true
+
+# Salvar: Ctrl+O, Enter, Ctrl+X
+
+pm2 restart saitec-automation
+
+# ============================================
+# TESTAR
+# ============================================
+curl http://localhost:3000/shop/top-products?source=kalodata&limit=10
+
+pm2 logs saitec-automation --lines 50
+

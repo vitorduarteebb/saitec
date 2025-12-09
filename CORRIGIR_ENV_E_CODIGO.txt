@@ -1,0 +1,63 @@
+# ============================================
+# CORRIGIR: .env com valor errado e código desatualizado
+# ============================================
+
+# PROBLEMA 1: .env tem "True" (maiúsculo) em vez de "true" (minúsculo)
+# PROBLEMA 2: Código antigo ainda está rodando
+
+# ============================================
+# PASSO 1: Corrigir .env
+# ============================================
+cd /root/saitec-automation
+nano .env
+
+# Procure por:
+# KALODATA_HEADLESS=True
+
+# Mude para (minúsculo):
+# KALODATA_HEADLESS=true
+
+# Salvar: Ctrl+O, Enter, Ctrl+X
+
+# Verificar:
+cat .env | grep KALODATA_HEADLESS
+# Deve mostrar: KALODATA_HEADLESS=true
+
+# ============================================
+# PASSO 2: Atualizar código do GitHub
+# ============================================
+git pull origin main
+
+# Verificar se atualizou:
+git log --oneline -3
+
+# ============================================
+# PASSO 3: Verificar se código foi atualizado
+# ============================================
+grep -A 5 "headlessMode = process.env.KALODATA_HEADLESS" src/scrapers/kalodataScraper.js
+
+# Deve mostrar algo como:
+# const headlessMode = process.env.KALODATA_HEADLESS !== 'false';
+
+# ============================================
+# PASSO 4: Reiniciar PM2 com novo código e .env
+# ============================================
+pm2 delete saitec-automation
+pm2 start server.js --name saitec-automation --update-env
+pm2 save
+
+# ============================================
+# PASSO 5: Verificar logs
+# ============================================
+pm2 logs saitec-automation --lines 30
+
+# Agora deve mostrar:
+# [Kalodata] Modo headless=true (true = sem interface, false = visível)
+
+# ============================================
+# PASSO 6: Testar
+# ============================================
+curl http://localhost:3000/shop/top-products?source=kalodata&limit=10
+
+# Se ainda não funcionar, verificar se há erros nos logs
+

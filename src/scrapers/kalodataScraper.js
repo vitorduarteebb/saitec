@@ -238,17 +238,21 @@ async function loginKalodata(page) {
  */
 async function initBrowser() {
   if (!browser) {
-    // Para Kalodata, SEMPRE usar modo headful (visível) para permitir login manual e renderização React
-    // O modo headless não renderiza React corretamente no Kalodata
-    // Forçar modo visível a menos que explicitamente configurado como headless para Kalodata
-    const headlessMode = process.env.KALODATA_HEADLESS === 'true';
+    // Para Kalodata, usar modo headless por padrão em servidores sem display
+    // Se KALODATA_HEADLESS=false, tentar usar modo visível com Xvfb
+    const headlessMode = process.env.KALODATA_HEADLESS !== 'false';
     const timeout = parseInt(process.env.PUPPETEER_TIMEOUT || 300000);
     const protocolTimeout = parseInt(process.env.PUPPETEER_PROTOCOL_TIMEOUT || 600000);
 
     logger.info(`[Kalodata] Inicializando navegador...`);
-    logger.info(`[Kalodata] Modo headless=${headlessMode} (false = visível, necessário para login e React)`);
-    logger.info(`[Kalodata] ⚠️ Kalodata requer modo visível para renderizar React corretamente`);
+    logger.info(`[Kalodata] Modo headless=${headlessMode} (true = sem interface, false = visível)`);
     logger.info(`[Kalodata] Timeouts: launch=${timeout}ms, protocol=${protocolTimeout}ms`);
+
+    // Se não está em headless mas não há DISPLAY configurado, tentar usar :99 (Xvfb)
+    if (!headlessMode && !process.env.DISPLAY) {
+      logger.warn(`[Kalodata] ⚠️ Modo visível solicitado mas DISPLAY não configurado. Tentando usar :99 (Xvfb)...`);
+      process.env.DISPLAY = ':99';
+    }
 
     // Tentar fechar browser anterior se existir
     try {
@@ -260,21 +264,40 @@ async function initBrowser() {
       browser = null;
     }
     
+    const launchArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process',
+      // Flags anti-detecção para Cloudflare
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor',
+      '--window-size=1920,1080',
+      '--start-maximized',
+      '--lang=pt-BR,pt',
+      '--disable-infobars',
+      '--disable-notifications',
+    ];
+
+    // Se não está em headless, adicionar flags para modo visível
+    if (!headlessMode) {
+      launchArgs.push('--disable-accelerated-2d-canvas');
+      launchArgs.push('--disable-gpu');
+    } else {
+      // Em headless, adicionar flags específicas para evitar detecção
+      launchArgs.push('--disable-gpu');
+      launchArgs.push('--disable-software-rasterizer');
+    }
+    
     browser = await puppeteer.launch({
-      headless: headlessMode,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-features=IsolateOrigins,site-per-process',
-      ],
+      headless: headlessMode ? 'new' : false, // Usar 'new' headless se disponível
+      args: launchArgs,
       timeout: timeout,
-      protocolTimeout: protocolTimeout
+      protocolTimeout: protocolTimeout,
+      ignoreHTTPSErrors: true, // Ignorar erros SSL
     });
-    logger.info(`[Kalodata] Navegador inicializado`);
+    logger.info(`[Kalodata] ✅ Navegador inicializado com sucesso`);
   }
   return browser;
 }
@@ -1165,8 +1188,47 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
     browser = await initBrowser();
     page = await browser.newPage();
     
-    // Configurar user agent
+    // Configurar user agent realista e atualizado
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    // Adicionar propriedades para evitar detecção
+    await page.evaluateOnNewDocument(() => {
+      // Remover webdriver
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      });
+      
+      // Sobrescrever plugins
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+      });
+      
+      // Sobrescrever languages
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['pt-BR', 'pt', 'en-US', 'en'],
+      });
+      
+      // Adicionar chrome object
+      window.chrome = {
+        runtime: {},
+      };
+      
+      // Sobrescrever permissions
+      const originalQuery = window.navigator.permissions.query;
+      window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+          Promise.resolve({ state: Notification.permission }) :
+          originalQuery(parameters)
+      );
+    });
+    
+    // Configurar viewport
+    await page.setViewport({ width: 1920, height: 1080 });
+    
+    // Configurar idioma
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+    });
     
     // Interceptar requisições de API para capturar dados de produtos
     const apiResponses = [];
@@ -1218,29 +1280,67 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
     
     logger.info(`[Kalodata] Acessando Kalodata: ${url}`);
     
+    // Adicionar delays e comportamento humano antes de acessar
+    await randomDelay(2000, 4000);
+    
     await retry(async () => {
       await page.goto(url, { 
-        waitUntil: 'networkidle2', 
+        waitUntil: 'domcontentloaded', // Mudar para domcontentloaded para ser mais rápido
         timeout: 180000 // 3 minutos para passar pelo Cloudflare
       });
-    }, { maxRetries: 2 });
+    }, { maxRetries: 3 });
     
-    // Aguardar desafio do Cloudflare passar (se houver)
+    // Aguardar um pouco para página carregar
+    await randomDelay(3000, 5000);
+    
+    // Verificar se está bloqueado pelo Cloudflare ANTES de continuar
     logger.info(`[Kalodata] Verificando se há desafio do Cloudflare...`);
-    try {
-      await page.waitForFunction(() => {
-        // Verificar se ainda está na página de desafio do Cloudflare
-        const isCloudflareChallenge = document.title.includes('Just a moment') ||
-                                     document.body.innerText.includes('Verify you are human') ||
-                                     document.body.innerText.includes('Checking your browser');
-        return !isCloudflareChallenge;
-      }, { timeout: 120000 }); // Aguardar até 2 minutos para passar pelo Cloudflare
-      logger.info(`[Kalodata] ✅ Desafio do Cloudflare resolvido ou não presente`);
-    } catch (e) {
-      logger.warn(`[Kalodata] ⚠️ Timeout aguardando Cloudflare. Continuando mesmo assim...`);
-      logger.warn(`[Kalodata] ⚠️ Se estiver bloqueado, configure HEADLESS=false no .env para resolver manualmente`);
+    let cloudflareBlocked = false;
+    let attempts = 0;
+    const maxCloudflareAttempts = 30; // 30 tentativas = ~3 minutos
+    
+    while (attempts < maxCloudflareAttempts) {
+      const pageState = await page.evaluate(() => {
+        const bodyText = document.body.innerText || document.body.textContent || '';
+        return {
+          title: document.title,
+          hasCloudflare: document.title.includes('Just a moment') ||
+                        bodyText.includes('Verify you are human') ||
+                        bodyText.includes('Checking your browser') ||
+                        bodyText.includes('Ray ID:') ||
+                        bodyText.includes('Performance & security by Cloudflare'),
+          bodyLength: bodyText.length
+        };
+      });
+      
+      if (pageState.hasCloudflare) {
+        cloudflareBlocked = true;
+        attempts++;
+        logger.warn(`[Kalodata] ⚠️ Cloudflare detectado (tentativa ${attempts}/${maxCloudflareAttempts}). Aguardando...`);
+        await randomDelay(5000, 7000); // Aguardar entre tentativas
+        
+        // Se ainda está bloqueado após várias tentativas, tentar recarregar
+        if (attempts % 10 === 0) {
+          logger.info(`[Kalodata] Tentando recarregar página para resolver Cloudflare...`);
+          await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+          await randomDelay(3000, 5000);
+        }
+      } else {
+        cloudflareBlocked = false;
+        logger.info(`[Kalodata] ✅ Cloudflare não detectado ou já resolvido`);
+        break;
+      }
     }
     
+    // Se ainda está bloqueado após todas as tentativas, lançar erro
+    if (cloudflareBlocked) {
+      logger.error(`[Kalodata] ❌ Página ainda está bloqueada pelo Cloudflare após ${maxCloudflareAttempts} tentativas!`);
+      logger.error(`[Kalodata] ⚠️ SOLUÇÃO: Configure KALODATA_HEADLESS=false no .env`);
+      logger.error(`[Kalodata] ⚠️ Depois, faça login manualmente uma vez para salvar cookies válidos`);
+      throw new Error('Página bloqueada pelo Cloudflare. Configure KALODATA_HEADLESS=false para resolver manualmente.');
+    }
+    
+    // Aguardar mais um pouco para garantir que página carregou completamente
     await randomDelay(5000, 7000);
     
     // SEMPRE solicitar login antes de coletar produtos

@@ -1,0 +1,71 @@
+# ============================================
+# CONTINUAR DIAGNÓSTICO
+# ============================================
+
+# Os logs de erro só mostram avisos do Puppeteer (não críticos)
+# Precisamos ver mais informações
+
+# ============================================
+# PASSO 1: Ver logs de saída (stdout)
+# ============================================
+pm2 logs saitec-automation --lines 100 --out
+
+# ============================================
+# PASSO 2: Testar endpoint e monitorar em tempo real
+# ============================================
+# Em um terminal, monitore os logs:
+pm2 logs saitec-automation --lines 0
+
+# Em outro terminal (ou depois), teste:
+curl -v http://localhost:3000/shop/top-products?source=kalodata&limit=10
+
+# Aguardar até ver o resultado ou erro completo
+
+# ============================================
+# PASSO 3: Verificar se o processo está rodando
+# ============================================
+pm2 status
+pm2 describe saitec-automation
+
+# ============================================
+# PASSO 4: Verificar MySQL
+# ============================================
+mysql -u saitec_user -p'Saitec2025@MySQL!' saitec_trends -e "SELECT COUNT(*) FROM tiktok_shop_products;"
+
+# ============================================
+# PASSO 5: Testar scraping diretamente (sem PM2)
+# ============================================
+cd /root/saitec-automation
+node -e "
+require('dotenv').config();
+const { scrapeKalodataTopProducts } = require('./src/scrapers/kalodataScraper');
+
+console.log('Iniciando teste direto...');
+scrapeKalodataTopProducts({ limit: 5 })
+  .then(products => {
+    console.log('✅ Sucesso! Produtos coletados:', products.length);
+    console.log(JSON.stringify(products.slice(0, 2), null, 2));
+    process.exit(0);
+  })
+  .catch(error => {
+    console.error('❌ Erro:', error.message);
+    console.error(error.stack);
+    process.exit(1);
+  });
+"
+
+# ============================================
+# PASSO 6: Verificar se há problemas de memória/disco
+# ============================================
+free -h
+df -h
+
+# ============================================
+# PASSO 7: Verificar se o servidor está respondendo
+# ============================================
+curl http://localhost:3000/health
+
+# Se não responder, verificar se está rodando:
+ps aux | grep node
+netstat -tlnp | grep 3000
+

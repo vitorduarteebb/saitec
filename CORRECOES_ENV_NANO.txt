@@ -1,0 +1,77 @@
+# ============================================
+# CORREÇÕES NO .env (no nano)
+# ============================================
+
+# PROBLEMAS ENCONTRADOS:
+# 1. KALODATA_HEADLESS=True (deve ser minúsculo: true)
+# 2. NODE_ENV duplicado (production e development)
+# 3. HEADLESS=false pode conflitar
+
+# ============================================
+# CORREÇÕES A FAZER NO NANO:
+# ============================================
+
+# 1. Mude a linha 18:
+#    DE: KALODATA_HEADLESS=True
+#    PARA: KALODATA_HEADLESS=true
+
+# 2. Remova a linha 21:
+#    DELETE: NODE_ENV=production
+#    (deixe apenas NODE_ENV=development)
+
+# 3. Opcional - Remova ou comente HEADLESS=false:
+#    DELETE: HEADLESS=false
+#    OU comente: #HEADLESS=false
+
+# ============================================
+# ARQUIVO .env CORRETO DEVERIA FICAR ASSIM:
+# ============================================
+
+ DB_HOST=localhost
+ DB_PORT=3306
+ DB_USER=saitec_user
+ DB_PASSWORD=Saitec2025@MySQL!
+ DB_NAME=saitec_trends
+ KALODATA_EMAIL=Rafacs83@gmail.com
+ KALODATA_PASSWORD=Managar@Manager@987
+ KALODATA_HEADLESS=true
+ PORT=3000
+ NODE_ENV=development
+ PANEL_ACCESS_TOKEN=
+
+# ============================================
+# PASSOS NO NANO:
+# ============================================
+
+# 1. Use as teclas de seta para navegar até a linha 18
+# 2. Use Ctrl+K para cortar a linha inteira
+# 3. Digite: KALODATA_HEADLESS=true
+# 4. Pressione Enter
+
+# 5. Navegue até a linha 21 (NODE_ENV=production)
+# 6. Use Ctrl+K para deletar essa linha
+
+# 7. Opcional: Navegue até HEADLESS=false e delete também
+
+# 8. Salvar: Ctrl+O, Enter
+# 9. Sair: Ctrl+X
+
+# ============================================
+# DEPOIS DE SALVAR:
+# ============================================
+
+# Verificar se ficou correto:
+# cat .env | grep -E "KALODATA_HEADLESS|NODE_ENV"
+
+# Deve mostrar:
+# KALODATA_HEADLESS=true
+# NODE_ENV=development
+
+# Reiniciar PM2:
+# pm2 delete saitec-automation
+# pm2 start server.js --name saitec-automation --update-env
+# pm2 save
+
+# Verificar logs:
+# pm2 logs saitec-automation --lines 30
+

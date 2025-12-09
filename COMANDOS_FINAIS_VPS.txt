@@ -1,0 +1,57 @@
+# ============================================
+# COMANDOS FINAIS PARA EXECUTAR NA VPS
+# ============================================
+
+# PROBLEMA IDENTIFICADO:
+# Missing X server or $DISPLAY
+# O Puppeteer não consegue abrir navegador em modo visível sem X server
+
+# ============================================
+# SOLUÇÃO RÁPIDA (RECOMENDADA)
+# ============================================
+
+# 1. Atualizar código
+cd /root/saitec-automation
+git pull origin main
+
+# 2. Configurar modo headless no .env
+nano .env
+
+# Mude esta linha para:
+KALODATA_HEADLESS=true
+
+# Salvar: Ctrl+O, Enter, Ctrl+X
+
+# 3. Reiniciar servidor
+pm2 restart saitec-automation
+
+# 4. Verificar logs
+pm2 logs saitec-automation --lines 50
+
+# 5. Testar endpoint
+curl http://localhost:3000/shop/top-products?source=kalodata&limit=10
+
+# ============================================
+# VERIFICAR SE FUNCIONOU
+# ============================================
+
+# Se retornar produtos JSON, está funcionando!
+# Acesse no navegador:
+# http://72.62.9.29:3000/painel
+
+# ============================================
+# SE AINDA NÃO FUNCIONAR
+# ============================================
+
+# Verificar credenciais:
+cat .env | grep KALODATA
+
+# Deve mostrar:
+# KALODATA_EMAIL=Rafacs83@gmail.com
+# KALODATA_PASSWORD=Managar@Manager@987
+# KALODATA_HEADLESS=true
+
+# Se as credenciais estiverem corretas mas ainda não coletar:
+# O primeiro login precisa ser feito manualmente uma vez
+# Depois os cookies são salvos e funciona automaticamente
+
