@@ -1976,6 +1976,35 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
         } catch (e) {
           // Ignorar erro ao salvar
         }
+      } else {
+        // ✅ PRODUTOS ENCONTRADOS NAS APIs! Retornar imediatamente sem depender do HTML
+        logger.info(`[Kalodata] 🎉 SUCESSO! ${products.length} produtos coletados das APIs! Retornando produtos sem depender do HTML bloqueado pelo Cloudflare.`);
+        
+        // Limitar ao número solicitado
+        if (products.length > limit) {
+          products = products.slice(0, limit);
+        }
+        
+        // Retornar produtos encontrados nas APIs
+        return products.map((product) => ({
+          id: product.id,
+          title: product.title,
+          revenue: product.revenue,
+          growthRate: product.growthRate,
+          itemsSold: product.itemsSold,
+          avgPrice: product.avgPrice,
+          commissionRate: product.commissionRate,
+          topVideos: product.topVideos,
+          creators: product.creators,
+          launchDate: product.launchDate,
+          conversionRate: product.conversionRate,
+          productUrl: product.productUrl,
+          imageUrl: product.imageUrl,
+          rank: product.rank || null,
+          source: 'kalodata',
+          category: category || null,
+          country: country || null
+        }));
       }
     } else {
       logger.warn(`[Kalodata] ⚠️ Nenhuma API foi interceptada. Verificando se há requisições pendentes...`);
