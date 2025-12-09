@@ -1167,12 +1167,30 @@
                     statusDiv.style.background = 'rgba(0, 255, 136, 0.1)';
                     statusDiv.style.color = 'var(--accent-success)';
                     statusDiv.style.border = '1px solid var(--accent-success)';
-                    statusDiv.innerHTML = '✅ Cookies salvos com sucesso!<br><small>Testando login...</small>';
+                    statusDiv.innerHTML = '✅ Cookies salvos com sucesso!<br><small>Testando login (pode levar alguns segundos)...</small>';
                     
-                    // Testar login fazendo uma requisição
+                    // Testar login fazendo uma requisição com timeout
+                    const testTimeout = setTimeout(() => {
+                        statusDiv.innerHTML = '✅ Cookies salvos com sucesso!<br><small>⚠️ Teste demorou muito. Você pode fechar este modal e tentar coletar produtos.</small><br><button onclick="closeCookieModal(); loadTrends(true);" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-primary); color: white; border: none; border-radius: 6px; cursor: pointer;">Fechar e Testar Coleta</button>';
+                    }, 30000); // 30 segundos de timeout
+                    
                     setTimeout(async () => {
                         try {
-                            const testResponse = await fetch('/shop/top-products?source=kalodata&limit=5');
+                            // Criar AbortController para timeout
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 segundos
+                            
+                            const testResponse = await fetch('/shop/top-products?source=kalodata&limit=5', {
+                                signal: controller.signal
+                            });
+                            
+                            clearTimeout(timeoutId);
+                            clearTimeout(testTimeout);
+                            
+                            if (!testResponse.ok) {
+                                throw new Error(`HTTP ${testResponse.status}: ${testResponse.statusText}`);
+                            }
+                            
                             const testResult = await testResponse.json();
                             
                             if (testResult.success && testResult.count > 0) {
@@ -1181,11 +1199,18 @@
                                     closeCookieModal();
                                     loadTrends(true);
                                 }, 2000);
+                            } else if (testResult.success && testResult.count === 0) {
+                                statusDiv.innerHTML = '✅ Cookies salvos!<br><small>⚠️ Nenhum produto coletado ainda (pode ser Cloudflare bloqueando). Você pode fechar e tentar coletar novamente.</small><br><button onclick="closeCookieModal(); loadTrends(true);" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-primary); color: white; border: none; border-radius: 6px; cursor: pointer;">Fechar e Tentar Coletar</button>';
                             } else {
-                                statusDiv.innerHTML = '⚠️ Cookies salvos, mas nenhum produto foi coletado.<br><small>Verifique se os cookies estão corretos ou se o Cloudflare está bloqueando.</small>';
+                                statusDiv.innerHTML = '✅ Cookies salvos!<br><small>⚠️ Erro no teste: ' + (testResult.error || 'Desconhecido') + '</small><br><button onclick="closeCookieModal(); loadTrends(true);" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-primary); color: white; border: none; border-radius: 6px; cursor: pointer;">Fechar e Tentar Coletar</button>';
                             }
                         } catch (error) {
-                            statusDiv.innerHTML = '⚠️ Cookies salvos, mas erro ao testar.<br><small>' + error.message + '</small>';
+                            clearTimeout(testTimeout);
+                            if (error.name === 'AbortError') {
+                                statusDiv.innerHTML = '✅ Cookies salvos!<br><small>⚠️ Teste demorou muito (timeout). Você pode fechar e tentar coletar produtos.</small><br><button onclick="closeCookieModal(); loadTrends(true);" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-primary); color: white; border: none; border-radius: 6px; cursor: pointer;">Fechar e Testar Coleta</button>';
+                            } else {
+                                statusDiv.innerHTML = '✅ Cookies salvos!<br><small>⚠️ Erro ao testar: ' + error.message + '</small><br><button onclick="closeCookieModal(); loadTrends(true);" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-primary); color: white; border: none; border-radius: 6px; cursor: pointer;">Fechar e Tentar Coletar</button>';
+                            }
                         }
                     }, 2000);
                 } else {

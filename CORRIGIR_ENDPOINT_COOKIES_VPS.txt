@@ -1,0 +1,52 @@
+# ============================================
+# CORRIGIR ENDPOINT DE COOKIES NA VPS
+# ============================================
+
+# PROBLEMA: "Rota não encontrada" ao salvar cookies
+# CORREÇÃO: Endpoint movido para antes do middleware 404
+
+# ============================================
+# COMANDOS PARA EXECUTAR NA VPS
+# ============================================
+
+# 1. Conectar na VPS
+ssh root@72.62.9.29
+
+# 2. Atualizar código
+cd /root/saitec-automation
+pm2 delete all
+git pull origin main
+
+# 3. Verificar se atualizou
+git log --oneline -3
+# Deve mostrar: "Fix: Mover endpoint de cookies..."
+
+# 4. Verificar se endpoint está antes do 404
+grep -n "POST /api/kalodata/cookies" server.js
+# Deve mostrar uma linha ANTES da linha com "Middleware para rotas não encontradas"
+
+# 5. Reiniciar servidor
+pm2 start server.js --name saitec-automation --update-env
+pm2 save
+
+# 6. Verificar se servidor está rodando
+pm2 status
+curl http://localhost:3000/health
+
+# 7. Testar endpoint de cookies
+curl -X POST http://localhost:3000/api/kalodata/cookies \
+  -H "Content-Type: application/json" \
+  -d '{"cookies":[{"name":"test","value":"test"}]}'
+
+# Deve retornar JSON com success: true ou erro de validação (não 404!)
+
+# ============================================
+# TESTAR NO PAINEL
+# ============================================
+
+# 1. Acessar: http://72.62.9.29:3000/painel
+# 2. Clicar em "🔐 Configurar Login"
+# 3. Colar os cookies JSON
+# 4. Clicar em "💾 Salvar Cookies e Testar"
+# 5. Deve funcionar agora! ✅
+
