@@ -1393,6 +1393,15 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
     // URL do Kalodata - página de produtos
     const url = 'https://www.kalodata.com/product';
     
+    // IMPORTANTE: Carregar cookies ANTES de acessar a página
+    logger.info(`[Kalodata] Carregando cookies salvos antes de acessar a página...`);
+    const hasCookies = await loadCookies(page);
+    if (hasCookies) {
+      logger.info(`[Kalodata] ✅ Cookies carregados. Eles serão usados ao acessar a página.`);
+    } else {
+      logger.info(`[Kalodata] ⚠️ Nenhum cookie salvo encontrado. Será necessário fazer login.`);
+    }
+    
     logger.info(`[Kalodata] Acessando Kalodata: ${url}`);
     
     // Adicionar delays e comportamento humano antes de acessar
@@ -1406,21 +1415,33 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
     }, { maxRetries: 3 });
     
     // Aguardar um pouco para página carregar
-    await randomDelay(3000, 5000);
+    await randomDelay(5000, 8000); // Aumentar tempo de espera inicial
     
     // Verificar se está bloqueado pelo Cloudflare ANTES de continuar
     logger.info(`[Kalodata] Verificando se há desafio do Cloudflare...`);
     let cloudflareBlocked = false;
     let attempts = 0;
-    const maxCloudflareAttempts = 30; // 30 tentativas = ~3 minutos
+    const maxCloudflareAttempts = 40; // Aumentar para 40 tentativas = ~4-5 minutos
     
     while (attempts < maxCloudflareAttempts) {
       const pageState = await page.evaluate(() => {
         const bodyText = document.body.innerText || document.body.textContent || '';
         const title = document.title;
+        const bodyLength = bodyText.length;
+        
+        // Verificar se tem conteúdo suficiente (mais de 1000 caracteres geralmente significa que passou)
+        const hasEnoughContent = bodyLength > 1000;
+        
+        // Verificar se tem palavras-chave de produtos (indica que passou pelo Cloudflare)
+        const hasProductContent = bodyText.includes('Receita') || 
+                                 bodyText.includes('R$') || 
+                                 bodyText.includes('Produto') ||
+                                 bodyText.includes('Rank') ||
+                                 bodyText.includes('Vendidos');
+        
         return {
           title: title,
-          hasCloudflare: title.includes('Just a moment') ||
+          hasCloudflare: (title.includes('Just a moment') ||
                         title.includes('Um momento') ||
                         title.includes('Please wait') ||
                         bodyText.includes('Verify you are human') ||
@@ -1430,8 +1451,11 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
                         bodyText.includes('Ray ID:') ||
                         bodyText.includes('precisa revisar a segurança da sua conexão') ||
                         bodyText.includes('Performance & security by Cloudflare') ||
-                        bodyText.includes('Desempenho e segurança do Cloudflare'),
-          bodyLength: bodyText.length
+                        bodyText.includes('Desempenho e segurança do Cloudflare')) && 
+                        !hasEnoughContent && !hasProductContent, // Só considerar bloqueado se não tem conteúdo
+          bodyLength: bodyLength,
+          hasEnoughContent: hasEnoughContent,
+          hasProductContent: hasProductContent
         };
       });
       
@@ -1439,17 +1463,19 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
         cloudflareBlocked = true;
         attempts++;
         logger.warn(`[Kalodata] ⚠️ Cloudflare detectado (tentativa ${attempts}/${maxCloudflareAttempts}). Aguardando...`);
-        await randomDelay(5000, 7000); // Aguardar entre tentativas
+        logger.info(`[Kalodata] Estado: título="${pageState.title}", tamanho=${pageState.bodyLength} caracteres`);
+        await randomDelay(8000, 12000); // Aumentar tempo de espera entre tentativas
         
         // Se ainda está bloqueado após várias tentativas, tentar recarregar
         if (attempts % 10 === 0) {
           logger.info(`[Kalodata] Tentando recarregar página para resolver Cloudflare...`);
-          await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
-          await randomDelay(3000, 5000);
+          await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 });
+          await randomDelay(5000, 8000);
         }
       } else {
         cloudflareBlocked = false;
         logger.info(`[Kalodata] ✅ Cloudflare não detectado ou já resolvido`);
+        logger.info(`[Kalodata] Estado: título="${pageState.title}", tamanho=${pageState.bodyLength} caracteres, tem conteúdo=${pageState.hasEnoughContent}, tem produtos=${pageState.hasProductContent}`);
         break;
       }
     }
