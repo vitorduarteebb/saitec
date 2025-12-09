@@ -1248,6 +1248,62 @@ const server = app.listen(PORT, () => {
   }
 });
 
+/**
+ * POST /api/kalodata/cookies
+ * Salva cookies do Kalodata manualmente (via painel)
+ */
+app.post('/api/kalodata/cookies', apiLimiter, async (req, res) => {
+  try {
+    const { cookies } = req.body;
+
+    if (!cookies || !Array.isArray(cookies)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cookies devem ser um array JSON válido'
+      });
+    }
+
+    // Validar formato dos cookies
+    for (const cookie of cookies) {
+      if (!cookie.name || !cookie.value) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cada cookie deve ter "name" e "value"'
+        });
+      }
+    }
+
+    logger.info(`[API] Salvando ${cookies.length} cookies do Kalodata manualmente`);
+
+    // Salvar cookies no arquivo
+    const fs = require('fs');
+    const path = require('path');
+    const cookiesDir = path.join(__dirname, 'cookies');
+    const cookiesPath = path.join(cookiesDir, 'kalodata-cookies.json');
+
+    // Garantir que o diretório existe
+    if (!fs.existsSync(cookiesDir)) {
+      fs.mkdirSync(cookiesDir, { recursive: true });
+    }
+
+    // Salvar cookies
+    fs.writeFileSync(cookiesPath, JSON.stringify(cookies, null, 2), 'utf-8');
+    logger.info(`[API] ✅ Cookies salvos em: ${cookiesPath}`);
+
+    res.json({
+      success: true,
+      message: `${cookies.length} cookies salvos com sucesso`,
+      savedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error(`[API] Erro ao salvar cookies: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Tratamento de erro ao iniciar servidor
 server.on('error', (error) => {
   if (error.code === 'EADDRINUSE') {

@@ -1,0 +1,111 @@
+# ============================================
+# ATUALIZAR PAINEL NA VPS - BOTÃO LOGIN MANUAL
+# ============================================
+
+# PROBLEMA: Botão "Atualizar com Login Manual" não aparece
+# CAUSA: Código não foi atualizado na VPS
+
+# ============================================
+# COMANDOS PARA EXECUTAR NA VPS
+# ============================================
+
+# 1. Conectar na VPS
+ssh root@72.62.9.29
+
+# 2. Ir para o diretório do projeto
+cd /root/saitec-automation
+
+# 3. Verificar código atual
+git log --oneline -3
+
+# Se NÃO mostrar "Feat: Adicionar botão 'Atualizar com Login Manual'...", continue:
+
+# 4. Parar servidor
+pm2 delete all
+
+# 5. Atualizar código do GitHub
+git pull origin main
+
+# Se der erro de branches divergentes:
+git config pull.rebase false
+git pull origin main
+
+# OU forçar atualização:
+git fetch origin
+git reset --hard origin/main
+
+# 6. Verificar se arquivo foi atualizado
+grep -n "Atualizar com Login Manual" public/panel.html
+
+# Deve mostrar a linha 471 com o botão
+
+# 7. Verificar se função existe
+grep -n "loadTrendsWithLogin" public/panel.html
+
+# Deve mostrar várias linhas com a função
+
+# 8. Reiniciar servidor
+pm2 start server.js --name saitec-automation --update-env
+pm2 save
+
+# 9. Verificar se servidor está rodando
+pm2 status
+curl http://localhost:3000/health
+
+# ============================================
+# LIMPAR CACHE DO NAVEGADOR
+# ============================================
+
+# Se ainda não aparecer após atualizar:
+
+# 1. No navegador, pressione Ctrl+Shift+R (ou Cmd+Shift+R no Mac)
+#    Isso força recarregar sem cache
+
+# 2. OU limpar cache do navegador:
+#    - Chrome: Ctrl+Shift+Delete
+#    - Firefox: Ctrl+Shift+Delete
+#    - Edge: Ctrl+Shift+Delete
+
+# 3. OU abrir em aba anônima/privada:
+#    - Chrome: Ctrl+Shift+N
+#    - Firefox: Ctrl+Shift+P
+#    - Edge: Ctrl+Shift+N
+
+# ============================================
+# VERIFICAR SE ARQUIVO FOI ATUALIZADO
+# ============================================
+
+# Na VPS, execute:
+cat public/panel.html | grep -A 2 "Atualizar com Login Manual"
+
+# Deve mostrar:
+# 🔐 Atualizar com Login Manual
+# </button>
+
+# Se não mostrar, o arquivo não foi atualizado!
+
+# ============================================
+# FORÇAR ATUALIZAÇÃO MANUAL (SE NECESSÁRIO)
+# ============================================
+
+# Se git pull não funcionar:
+
+cd /root/saitec-automation
+git fetch origin
+git checkout main
+git reset --hard origin/main
+pm2 restart saitec-automation
+
+# ============================================
+# TESTAR
+# ============================================
+
+# 1. Acessar painel:
+# http://72.62.9.29:3000/painel
+
+# 2. Limpar cache (Ctrl+Shift+R)
+
+# 3. Deve aparecer DOIS botões:
+#    - 🔄 Atualizar
+#    - 🔐 Atualizar com Login Manual (NOVO)
+

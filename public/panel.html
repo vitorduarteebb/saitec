@@ -388,6 +388,106 @@
             color: var(--text-secondary);
         }
 
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            margin: 5% auto;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 700px;
+            box-shadow: var(--shadow);
+            position: relative;
+            animation: modalSlideIn 0.3s ease;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .close {
+            color: var(--text-secondary);
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            transition: color 0.2s;
+            line-height: 1;
+        }
+
+        .close:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: var(--text-primary);
+            padding-right: 40px;
+        }
+
+        .modal-content h3 {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: var(--accent-primary);
+            font-size: 16px;
+        }
+
+        .modal-content p {
+            margin: 8px 0;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .modal-content ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .modal-content li {
+            margin: 5px 0;
+            color: var(--text-secondary);
+        }
+
+        .modal-content textarea {
+            resize: vertical;
+            min-height: 150px;
+        }
+
+        .modal-content a {
+            color: var(--accent-primary);
+            text-decoration: none;
+        }
+
+        .modal-content a:hover {
+            text-decoration: underline;
+        }
+
         .empty-state h3 {
             margin-bottom: 12px;
             color: var(--text-primary);
@@ -467,11 +567,60 @@
                 <span class="loading-spinner" id="refreshSpinner" style="display: none;"></span>
                 🔄 Atualizar
             </button>
-            <button class="btn btn-primary" onclick="loadTrendsWithLogin()" style="background: var(--accent-secondary); margin-left: 10px;">
-                🔐 Atualizar com Login Manual
+            <button class="btn btn-primary" onclick="showCookieModal()" style="background: var(--accent-secondary); margin-left: 10px;">
+                🔐 Configurar Login
             </button>
             <a href="#" id="downloadCSV" class="btn btn-download" download>📥 Baixar CSV</a>
             <a href="#" id="downloadAllCSV" class="btn btn-download" download style="background: var(--accent-secondary);">📊 Baixar CSV Completo (Dia)</a>
+        </div>
+
+        <!-- Modal para Configurar Cookies -->
+        <div id="cookieModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeCookieModal()">&times;</span>
+                <h2>🔐 Configurar Login do Kalodata</h2>
+                <div style="margin: 20px 0;">
+                    <h3>Passo 1: Fazer Login no Kalodata</h3>
+                    <p>1. Abra uma nova aba e acesse: <a href="https://www.kalodata.com" target="_blank" style="color: var(--accent-primary);">https://www.kalodata.com</a></p>
+                    <p>2. Faça login com suas credenciais</p>
+                    <p>3. Após fazer login, volte aqui e continue</p>
+                </div>
+                <div style="margin: 20px 0;">
+                    <h3>Passo 2: Copiar Cookies</h3>
+                    <p><strong>Método 1 - Usando Extensão (MAIS FÁCIL):</strong></p>
+                    <ol style="margin-left: 20px; color: var(--text-secondary);">
+                        <li>Instale a extensão <strong>"Cookie-Editor"</strong> no Chrome/Edge:
+                            <br><a href="https://chrome.google.com/webstore/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm" target="_blank" style="color: var(--accent-primary);">🔗 Baixar Cookie-Editor</a>
+                        </li>
+                        <li>Após fazer login no Kalodata, clique no ícone da extensão</li>
+                        <li>Clique em "Export" → "JSON"</li>
+                        <li>Cole o JSON completo no campo abaixo</li>
+                    </ol>
+                    <p style="margin-top: 15px;"><strong>Método 2 - Manual (Chrome/Edge):</strong></p>
+                    <ol style="margin-left: 20px; color: var(--text-secondary);">
+                        <li>Pressione F12 (ou clique com botão direito → Inspecionar)</li>
+                        <li>Vá na aba "Application" (Aplicativo)</li>
+                        <li>No menu lateral, expanda "Cookies" → "https://www.kalodata.com"</li>
+                        <li>Copie manualmente os cookies importantes (ex: session, token, etc.)</li>
+                        <li>Formate como JSON: <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px;">[{"name":"nome","value":"valor","domain":".kalodata.com"}]</code></li>
+                    </ol>
+                </div>
+                <div style="margin: 20px 0;">
+                    <label for="cookieJson" style="display: block; margin-bottom: 10px; font-weight: bold;">
+                        Cole os cookies aqui (formato JSON):
+                    </label>
+                    <textarea id="cookieJson" rows="10" style="width: 100%; padding: 10px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; font-family: monospace; font-size: 12px;" placeholder='[{"name":"cookie1","value":"valor1","domain":".kalodata.com"},...]'></textarea>
+                    <p style="margin-top: 10px; font-size: 12px; color: var(--text-secondary);">
+                        💡 Dica: Use uma extensão de cookies para exportar facilmente
+                    </p>
+                </div>
+                <div style="margin: 20px 0;">
+                    <button class="btn btn-primary" onclick="saveCookies()" style="width: 100%;">
+                        💾 Salvar Cookies e Testar
+                    </button>
+                </div>
+                <div id="cookieStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
+            </div>
         </div>
 
         <div id="status" class="status" style="display: none;">
@@ -860,6 +1009,198 @@
 
         // Atualizar link do CSV ao carregar
         updateCSVLink();
+
+        // Funções do Modal de Cookies
+        function showCookieModal() {
+            document.getElementById('cookieModal').style.display = 'block';
+        }
+
+        function closeCookieModal() {
+            document.getElementById('cookieModal').style.display = 'none';
+            document.getElementById('cookieStatus').style.display = 'none';
+            document.getElementById('cookieJson').value = '';
+        }
+
+        // Fechar modal ao clicar fora
+        window.onclick = function(event) {
+            const modal = document.getElementById('cookieModal');
+            if (event.target === modal) {
+                closeCookieModal();
+            }
+        }
+
+        async function saveCookies() {
+            const cookieJson = document.getElementById('cookieJson').value.trim();
+            const statusDiv = document.getElementById('cookieStatus');
+            
+            if (!cookieJson) {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = 'rgba(255, 0, 80, 0.1)';
+                statusDiv.style.color = 'var(--accent-secondary)';
+                statusDiv.style.border = '1px solid var(--accent-secondary)';
+                statusDiv.textContent = '❌ Por favor, cole os cookies antes de salvar.';
+                return;
+            }
+
+            try {
+                // Validar JSON
+                const cookies = JSON.parse(cookieJson);
+                if (!Array.isArray(cookies)) {
+                    throw new Error('Os cookies devem ser um array JSON');
+                }
+
+                // Enviar para o servidor
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = 'rgba(37, 244, 238, 0.1)';
+                statusDiv.style.color = 'var(--accent-primary)';
+                statusDiv.style.border = '1px solid var(--accent-primary)';
+                statusDiv.textContent = '⏳ Salvando cookies...';
+
+                const response = await fetch('/api/kalodata/cookies', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ cookies })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    statusDiv.style.background = 'rgba(0, 255, 136, 0.1)';
+                    statusDiv.style.color = 'var(--accent-success)';
+                    statusDiv.style.border = '1px solid var(--accent-success)';
+                    statusDiv.innerHTML = '✅ Cookies salvos com sucesso!<br><small>Testando login...</small>';
+                    
+                    // Testar login fazendo uma requisição
+                    setTimeout(async () => {
+                        try {
+                            const testResponse = await fetch('/shop/top-products?source=kalodata&limit=5');
+                            const testResult = await testResponse.json();
+                            
+                            if (testResult.success && testResult.count > 0) {
+                                statusDiv.innerHTML = '✅ Cookies salvos e testados com sucesso!<br><small>Login funcionando corretamente.</small>';
+                                setTimeout(() => {
+                                    closeCookieModal();
+                                    loadTrends(true);
+                                }, 2000);
+                            } else {
+                                statusDiv.innerHTML = '⚠️ Cookies salvos, mas nenhum produto foi coletado.<br><small>Verifique se os cookies estão corretos ou se o Cloudflare está bloqueando.</small>';
+                            }
+                        } catch (error) {
+                            statusDiv.innerHTML = '⚠️ Cookies salvos, mas erro ao testar.<br><small>' + error.message + '</small>';
+                        }
+                    }, 2000);
+                } else {
+                    throw new Error(result.error || 'Erro ao salvar cookies');
+                }
+            } catch (error) {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = 'rgba(255, 0, 80, 0.1)';
+                statusDiv.style.color = 'var(--accent-secondary)';
+                statusDiv.style.border = '1px solid var(--accent-secondary)';
+                statusDiv.textContent = '❌ Erro: ' + error.message;
+            }
+        }
+
+        // Funções do Modal de Cookies
+        function showCookieModal() {
+            document.getElementById('cookieModal').style.display = 'block';
+        }
+
+        function closeCookieModal() {
+            document.getElementById('cookieModal').style.display = 'none';
+            document.getElementById('cookieStatus').style.display = 'none';
+            document.getElementById('cookieJson').value = '';
+        }
+
+        // Fechar modal ao clicar fora
+        window.onclick = function(event) {
+            const modal = document.getElementById('cookieModal');
+            if (event.target === modal) {
+                closeCookieModal();
+            }
+        }
+
+        async function saveCookies() {
+            const cookieJson = document.getElementById('cookieJson').value.trim();
+            const statusDiv = document.getElementById('cookieStatus');
+            
+            if (!cookieJson) {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = 'rgba(255, 0, 80, 0.1)';
+                statusDiv.style.color = 'var(--accent-secondary)';
+                statusDiv.style.border = '1px solid var(--accent-secondary)';
+                statusDiv.style.padding = '10px';
+                statusDiv.style.borderRadius = '8px';
+                statusDiv.textContent = '❌ Por favor, cole os cookies antes de salvar.';
+                return;
+            }
+
+            try {
+                // Validar JSON
+                const cookies = JSON.parse(cookieJson);
+                if (!Array.isArray(cookies)) {
+                    throw new Error('Os cookies devem ser um array JSON');
+                }
+
+                // Enviar para o servidor
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = 'rgba(37, 244, 238, 0.1)';
+                statusDiv.style.color = 'var(--accent-primary)';
+                statusDiv.style.border = '1px solid var(--accent-primary)';
+                statusDiv.style.padding = '10px';
+                statusDiv.style.borderRadius = '8px';
+                statusDiv.textContent = '⏳ Salvando cookies...';
+
+                const response = await fetch('/api/kalodata/cookies', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ cookies })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    statusDiv.style.background = 'rgba(0, 255, 136, 0.1)';
+                    statusDiv.style.color = 'var(--accent-success)';
+                    statusDiv.style.border = '1px solid var(--accent-success)';
+                    statusDiv.innerHTML = '✅ Cookies salvos com sucesso!<br><small>Testando login...</small>';
+                    
+                    // Testar login fazendo uma requisição
+                    setTimeout(async () => {
+                        try {
+                            const testResponse = await fetch('/shop/top-products?source=kalodata&limit=5');
+                            const testResult = await testResponse.json();
+                            
+                            if (testResult.success && testResult.count > 0) {
+                                statusDiv.innerHTML = '✅ Cookies salvos e testados com sucesso!<br><small>Login funcionando corretamente. ' + testResult.count + ' produtos coletados.</small>';
+                                setTimeout(() => {
+                                    closeCookieModal();
+                                    loadTrends(true);
+                                }, 2000);
+                            } else {
+                                statusDiv.innerHTML = '⚠️ Cookies salvos, mas nenhum produto foi coletado.<br><small>Verifique se os cookies estão corretos ou se o Cloudflare está bloqueando.</small>';
+                            }
+                        } catch (error) {
+                            statusDiv.innerHTML = '⚠️ Cookies salvos, mas erro ao testar.<br><small>' + error.message + '</small>';
+                        }
+                    }, 2000);
+                } else {
+                    throw new Error(result.error || 'Erro ao salvar cookies');
+                }
+            } catch (error) {
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = 'rgba(255, 0, 80, 0.1)';
+                statusDiv.style.color = 'var(--accent-secondary)';
+                statusDiv.style.border = '1px solid var(--accent-secondary)';
+                statusDiv.style.padding = '10px';
+                statusDiv.style.borderRadius = '8px';
+                statusDiv.textContent = '❌ Erro: ' + error.message;
+            }
+        }
 
         // Carregar produtos ao carregar a página
         loadTrends();

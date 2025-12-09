@@ -1,0 +1,118 @@
+# ============================================
+# APLICAR FUNCIONALIDADE DE LOGIN MANUAL NA VPS
+# ============================================
+
+# ✅ Código commitado e enviado para GitHub
+# Nova funcionalidade: Botão "Atualizar com Login Manual"
+
+# ============================================
+# COMANDOS PARA EXECUTAR NA VPS
+# ============================================
+
+# 1. Conectar na VPS
+ssh root@72.62.9.29
+
+# 2. Ir para o diretório do projeto
+cd /root/saitec-automation
+
+# 3. Parar processos travados
+pm2 delete all
+
+# 4. Atualizar código do GitHub
+git pull origin main
+
+# Verificar se atualizou:
+git log --oneline -3
+# Deve mostrar: "Feat: Adicionar botão 'Atualizar com Login Manual'..."
+
+# 5. Verificar se arquivos foram atualizados
+ls -la public/panel.html
+grep -n "Atualizar com Login Manual" public/panel.html
+
+# Deve mostrar a linha com o novo botão
+
+# 6. Reiniciar servidor
+pm2 start server.js --name saitec-automation --update-env
+pm2 save
+
+# 7. Verificar se servidor está rodando
+pm2 status
+curl http://localhost:3000/health
+
+# ============================================
+# COMO USAR A NOVA FUNCIONALIDADE
+# ============================================
+
+# 1. Acessar o painel:
+# http://72.62.9.29:3000/painel
+
+# 2. Você verá DOIS botões:
+#    - 🔄 Atualizar (modo normal, headless)
+#    - 🔐 Atualizar com Login Manual (abre navegador visível)
+
+# 3. Ao clicar em "🔐 Atualizar com Login Manual":
+#    - O sistema força KALODATA_HEADLESS=false temporariamente
+#    - Abre navegador visível na VPS
+#    - Aguarda até 5 minutos para login manual
+#    - Após login, coleta continua automaticamente
+#    - Cookies são salvos para próximas vezes
+
+# ============================================
+# IMPORTANTE: ACESSO AO NAVEGADOR NA VPS
+# ============================================
+
+# Para ver o navegador aberto na VPS, você precisa de:
+# 1. VNC Server instalado na VPS
+# 2. OU SSH com X11 forwarding
+# 3. OU acesso remoto à VPS
+
+# Se não tiver acesso visual à VPS:
+# - O navegador abrirá mas você não verá
+# - Mesmo assim, pode fazer login se tiver credenciais no .env
+# - Ou aguardar que alguém com acesso faça login manualmente
+
+# ============================================
+# TESTAR A FUNCIONALIDADE
+# ============================================
+
+# 1. Acessar painel:
+curl http://localhost:3000/painel
+
+# 2. Testar endpoint com forceVisible:
+curl "http://localhost:3000/shop/top-products?source=kalodata&limit=10&forceVisible=true"
+
+# 3. Monitorar logs:
+pm2 logs saitec-automation --lines 0
+
+# Deve mostrar:
+# [API] ⚠️ Modo login manual ativado (forceVisible=true)
+# [Kalodata] 🔐 MODO LOGIN MANUAL ATIVADO
+# [Kalodata] ⚠️ O navegador será aberto na VPS...
+
+# ============================================
+# SE PRECISAR INSTALAR VNC NA VPS (OPCIONAL)
+# ============================================
+
+# Para ver o navegador visualmente:
+apt update
+apt install -y tigervnc-standalone-server tigervnc-common
+
+# Criar senha VNC:
+vncpasswd
+
+# Iniciar servidor VNC:
+vncserver :1 -geometry 1920x1080 -depth 24
+
+# Conectar via cliente VNC:
+# IP: 72.62.9.29:5901
+
+# ============================================
+# VERIFICAR SE FUNCIONOU
+# ============================================
+
+# Nos logs, deve aparecer:
+# ✅ [Kalodata] ✅ Login bem-sucedido usando cookies salvos!
+# ✅ [Kalodata] ✅ Coletados X produtos mais vendidos
+
+# No painel, deve mostrar produtos após login manual
+
