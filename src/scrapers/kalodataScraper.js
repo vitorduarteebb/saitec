@@ -179,32 +179,128 @@ async function loginKalodata(page) {
     const password = process.env.KALODATA_PASSWORD;
     
     if (email && password) {
-      logger.info('[Kalodata] Tentando login automático...');
+      logger.info('[Kalodata] 🔐 Tentando login automático com credenciais do .env...');
       try {
-        // Aguardar campos de login aparecerem
-        await page.waitForSelector('input[type="email"], input[type="text"][placeholder*="email"], input[name="email"], input[id*="email"]', { timeout: 10000 });
+        // Navegar para a página de login
+        const loginUrl = 'https://www.kalodata.com/login';
+        logger.info(`[Kalodata] Navegando para página de login: ${loginUrl}`);
+        await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+        await randomDelay(2000, 3000);
         
-        // Preencher email
-        await page.type('input[type="email"], input[type="text"][placeholder*="email"], input[name="email"], input[id*="email"]', email, { delay: 100 });
+        // Aguardar campos de login aparecerem usando os seletores específicos
+        logger.info('[Kalodata] Aguardando campos de login aparecerem...');
+        try {
+          // Tentar primeiro com os IDs específicos fornecidos
+          await page.waitForSelector('#register_email', { timeout: 10000 });
+          await page.waitForSelector('#register_password', { timeout: 10000 });
+          logger.info('[Kalodata] ✅ Campos de login encontrados!');
+        } catch (e) {
+          // Fallback para seletores genéricos
+          logger.warn('[Kalodata] Campos específicos não encontrados, tentando seletores genéricos...');
+          await page.waitForSelector('input[type="email"], input[type="text"][placeholder*="email"], input[name="email"], input[id*="email"]', { timeout: 10000 });
+          await page.waitForSelector('input[type="password"], input[name="password"], input[id*="password"]', { timeout: 10000 });
+        }
+        
+        // Limpar campos antes de preencher (caso já tenham algum valor)
+        logger.info('[Kalodata] Preenchendo email...');
+        await page.evaluate(() => {
+          const emailField = document.getElementById('register_email');
+          if (emailField) emailField.value = '';
+        });
+        await page.type('#register_email', email, { delay: 100 });
         await randomDelay(500, 1000);
         
-        // Preencher senha
-        await page.type('input[type="password"], input[name="password"], input[id*="password"]', password, { delay: 100 });
-        await randomDelay(500, 1000);
+        logger.info('[Kalodata] Preenchendo senha...');
+        await page.evaluate(() => {
+          const passwordField = document.getElementById('register_password');
+          if (passwordField) passwordField.value = '';
+        });
+        await page.type('#register_password', password, { delay: 100 });
+        await randomDelay(1000, 2000);
         
-        // Clicar no botão de login
-        await page.click('button[type="submit"], button[class*="login"], button:contains("Login"), button:contains("Entrar")');
+        // Procurar e clicar no botão de login/submit
+        logger.info('[Kalodata] Procurando botão de login...');
+        const submitButton = await page.evaluate(() => {
+          // Tentar vários seletores possíveis para o botão de login
+          const selectors = [
+            'button[type="submit"]',
+            'button[class*="login"]',
+            'button[class*="Login"]',
+            'button[class*="submit"]',
+            'button[class*="Submit"]',
+            'form button',
+            'input[type="submit"]',
+            'button:contains("Login")',
+            'button:contains("Entrar")',
+            'button:contains("Sign in")',
+            '[data-testid*="login"]',
+            '[aria-label*="login"]'
+          ];
+          
+          for (const selector of selectors) {
+            try {
+              const button = document.querySelector(selector);
+              if (button) {
+                const text = (button.textContent || button.innerText || '').toLowerCase();
+                if (text.includes('login') || text.includes('entrar') || text.includes('sign in') || selector.includes('submit')) {
+                  return selector;
+                }
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+          
+          // Se não encontrou, retornar o primeiro botão submit encontrado
+          const submitBtn = document.querySelector('button[type="submit"]');
+          if (submitBtn) return 'button[type="submit"]';
+          
+          return null;
+        });
+        
+        if (submitButton) {
+          logger.info(`[Kalodata] Botão encontrado: ${submitButton}. Clicando...`);
+          await page.click(submitButton);
+        } else {
+          // Tentar pressionar Enter no campo de senha
+          logger.warn('[Kalodata] Botão não encontrado, tentando pressionar Enter...');
+          await page.focus('#register_password');
+          await page.keyboard.press('Enter');
+        }
+        
         await randomDelay(3000, 5000);
+        
+        // Aguardar redirecionamento ou mudança na página
+        logger.info('[Kalodata] Aguardando resposta do login...');
+        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {
+          logger.warn('[Kalodata] Nenhuma navegação detectada após login, continuando...');
+        });
+        
+        await randomDelay(2000, 3000);
         
         // Verificar se login foi bem-sucedido
         if (await isLoggedIn(page)) {
           logger.info('[Kalodata] ✅ Login automático bem-sucedido!');
           await saveCookies(page);
           return true;
+        } else {
+          logger.warn('[Kalodata] ⚠️ Login automático executado mas login não detectado. Verificando novamente...');
+          // Aguardar mais um pouco e verificar novamente
+          await randomDelay(3000, 5000);
+          if (await isLoggedIn(page)) {
+            logger.info('[Kalodata] ✅ Login confirmado após aguardar!');
+            await saveCookies(page);
+            return true;
+          } else {
+            logger.warn('[Kalodata] ⚠️ Login automático pode ter falhado. Verifique as credenciais no .env');
+          }
         }
       } catch (error) {
-        logger.warn(`[Kalodata] Erro no login automático: ${error.message}`);
+        logger.error(`[Kalodata] ❌ Erro no login automático: ${error.message}`);
+        logger.error(`[Kalodata] Stack: ${error.stack}`);
       }
+    } else {
+      logger.warn('[Kalodata] ⚠️ KALODATA_EMAIL ou KALODATA_PASSWORD não configurados no .env');
     }
     
     // Se login automático falhou ou não há credenciais, aguardar login manual
