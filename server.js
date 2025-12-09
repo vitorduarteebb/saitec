@@ -1197,57 +1197,6 @@ app.get('/trends/latest', apiLimiter, async (req, res) => {
 // Variável global para armazenar os cron jobs
 let schedulerJobs = null;
 
-// Inicia o servidor
-// Middleware de tratamento de erros global (deve ser o último middleware)
-app.use((err, req, res, next) => {
-  logger.error('[Express] Erro não tratado:', err);
-  
-  // Sempre retornar JSON, nunca HTML
-  res.status(err.status || 500).json({
-    success: false,
-    error: 'Erro interno do servidor',
-    message: process.env.NODE_ENV === 'production' 
-      ? 'Ocorreu um erro ao processar a requisição' 
-      : err.message,
-    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
-  });
-});
-
-// Middleware para rotas não encontradas (404)
-app.use((req, res) => {
-  // Sempre retornar JSON, nunca HTML
-  res.status(404).json({
-    success: false,
-    error: 'Rota não encontrada',
-    message: `A rota ${req.method} ${req.path} não existe`,
-    availableEndpoints: {
-      health: '/health',
-      top20: '/trends/top20',
-      top20csv: '/trends/top20.csv',
-      panel: '/painel',
-      latest: '/trends/latest',
-      collect: '/trends/collect',
-      collectProgress: '/trends/collect/progress'
-    }
-  });
-});
-
-const server = app.listen(PORT, () => {
-  logger.info(`Servidor de tendências rodando na porta ${PORT}`);
-  logger.info(`Health check: http://localhost:${PORT}/health`);
-  logger.info(`Top 20 (JSON): http://localhost:${PORT}/trends/top20`);
-  logger.info(`Top 20 (CSV): http://localhost:${PORT}/trends/top20.csv`);
-  logger.info(`Painel Web: http://localhost:${PORT}/painel`);
-  logger.info(`Coleta Interna (n8n): http://localhost:${PORT}/internal/run-collection`);
-  logger.info(`Latest trends: http://localhost:${PORT}/trends/latest`);
-  
-  // Iniciar agendamento automático
-  schedulerJobs = startScheduler();
-  if (schedulerJobs) {
-    logger.info(`✅ Agendamento automático ATIVO - Coleta e CSV serão gerados automaticamente`);
-  }
-});
-
 /**
  * POST /api/kalodata/cookies
  * Salva cookies do Kalodata manualmente (via painel)
@@ -1301,6 +1250,59 @@ app.post('/api/kalodata/cookies', apiLimiter, async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+// Inicia o servidor
+// Middleware de tratamento de erros global (deve ser o último middleware)
+app.use((err, req, res, next) => {
+  logger.error('[Express] Erro não tratado:', err);
+  
+  // Sempre retornar JSON, nunca HTML
+  res.status(err.status || 500).json({
+    success: false,
+    error: 'Erro interno do servidor',
+    message: process.env.NODE_ENV === 'production' 
+      ? 'Ocorreu um erro ao processar a requisição' 
+      : err.message,
+    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
+  });
+});
+
+// Middleware para rotas não encontradas (404)
+app.use((req, res) => {
+  // Sempre retornar JSON, nunca HTML
+  res.status(404).json({
+    success: false,
+    error: 'Rota não encontrada',
+    message: `A rota ${req.method} ${req.path} não existe`,
+    availableEndpoints: {
+      health: '/health',
+      top20: '/trends/top20',
+      top20csv: '/trends/top20.csv',
+      panel: '/painel',
+      latest: '/trends/latest',
+      collect: '/trends/collect',
+      collectProgress: '/trends/collect/progress',
+      saveCookies: '/api/kalodata/cookies'
+    }
+  });
+});
+
+const server = app.listen(PORT, () => {
+  logger.info(`Servidor de tendências rodando na porta ${PORT}`);
+  logger.info(`Health check: http://localhost:${PORT}/health`);
+  logger.info(`Top 20 (JSON): http://localhost:${PORT}/trends/top20`);
+  logger.info(`Top 20 (CSV): http://localhost:${PORT}/trends/top20.csv`);
+  logger.info(`Painel Web: http://localhost:${PORT}/painel`);
+  logger.info(`Coleta Interna (n8n): http://localhost:${PORT}/internal/run-collection`);
+  logger.info(`Latest trends: http://localhost:${PORT}/trends/latest`);
+  logger.info(`Salvar Cookies: POST http://localhost:${PORT}/api/kalodata/cookies`);
+  
+  // Iniciar agendamento automático
+  schedulerJobs = startScheduler();
+  if (schedulerJobs) {
+    logger.info(`✅ Agendamento automático ATIVO - Coleta e CSV serão gerados automaticamente`);
   }
 });
 
