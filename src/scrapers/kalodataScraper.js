@@ -480,53 +480,87 @@ function extractProductsFromApiResponse(apiData, apiUrl = '') {
   
   try {
     // Log da estrutura para debug (apenas para APIs importantes)
-    if (apiUrl.includes('/product/queryList')) {
-      logger.debug(`[Kalodata] Estrutura da API /product/queryList:`, {
-        keys: Object.keys(apiData),
-        hasData: !!apiData.data,
-        hasList: !!apiData.list,
-        hasItems: !!apiData.items,
-        isArray: Array.isArray(apiData)
+    if (apiUrl.includes('/product/queryList') || apiUrl.includes('/api/allLastDay') || apiUrl.includes('/api/firstDay0')) {
+      logger.info(`[Kalodata] Estrutura da API ${apiUrl.substring(apiUrl.lastIndexOf('/'))}:`, {
+        keys: Object.keys(apiData || {}),
+        hasData: !!apiData?.data,
+        hasList: !!apiData?.list,
+        hasItems: !!apiData?.items,
+        isArray: Array.isArray(apiData),
+        dataType: typeof apiData
       });
     }
     
     // Tentar diferentes estruturas de resposta da API
     let productList = null;
     
-    if (Array.isArray(apiData)) {
-      productList = apiData;
-    } else if (apiData.data) {
-      // apiData.data pode ser array ou objeto com array dentro
-      if (Array.isArray(apiData.data)) {
-        productList = apiData.data;
-      } else if (apiData.data.list && Array.isArray(apiData.data.list)) {
-        productList = apiData.data.list;
-      } else if (apiData.data.items && Array.isArray(apiData.data.items)) {
-        productList = apiData.data.items;
-      } else if (apiData.data.products && Array.isArray(apiData.data.products)) {
-        productList = apiData.data.products;
-      } else if (apiData.data.data && Array.isArray(apiData.data.data)) {
-        productList = apiData.data.data;
+    // APIs específicas da versão gratuita (allLastDay, firstDay0)
+    if (apiUrl.includes('/api/allLastDay') || apiUrl.includes('/api/firstDay0')) {
+      // Essas APIs podem retornar diretamente um array ou objeto com data/list
+      if (Array.isArray(apiData)) {
+        productList = apiData;
+      } else if (apiData && typeof apiData === 'object') {
+        // Tentar diferentes campos comuns
+        if (Array.isArray(apiData.data)) {
+          productList = apiData.data;
+        } else if (Array.isArray(apiData.list)) {
+          productList = apiData.list;
+        } else if (Array.isArray(apiData.items)) {
+          productList = apiData.items;
+        } else if (Array.isArray(apiData.products)) {
+          productList = apiData.products;
+        } else if (apiData.data && typeof apiData.data === 'object') {
+          // Se data é objeto, tentar extrair arrays dentro dele
+          if (Array.isArray(apiData.data.list)) {
+            productList = apiData.data.list;
+          } else if (Array.isArray(apiData.data.items)) {
+            productList = apiData.data.items;
+          } else if (Array.isArray(apiData.data.products)) {
+            productList = apiData.data.products;
+          } else if (Array.isArray(apiData.data.data)) {
+            productList = apiData.data.data;
+          }
+        }
       }
-    } else if (apiData.list && Array.isArray(apiData.list)) {
-      productList = apiData.list;
-    } else if (apiData.products && Array.isArray(apiData.products)) {
-      productList = apiData.products;
-    } else if (apiData.items && Array.isArray(apiData.items)) {
-      productList = apiData.items;
-    } else if (apiData.result && Array.isArray(apiData.result)) {
-      productList = apiData.result;
-    } else if (apiData.records && Array.isArray(apiData.records)) {
-      productList = apiData.records;
-    } else if (apiData.props && apiData.props.pageProps) {
-      // Estrutura Next.js
-      const pageProps = apiData.props.pageProps;
-      if (pageProps.products && Array.isArray(pageProps.products)) {
-        productList = pageProps.products;
-      } else if (pageProps.items && Array.isArray(pageProps.items)) {
-        productList = pageProps.items;
-      } else if (pageProps.data && Array.isArray(pageProps.data)) {
-        productList = pageProps.data;
+    }
+    
+    // Estruturas genéricas
+    if (!productList) {
+      if (Array.isArray(apiData)) {
+        productList = apiData;
+      } else if (apiData?.data) {
+        // apiData.data pode ser array ou objeto com array dentro
+        if (Array.isArray(apiData.data)) {
+          productList = apiData.data;
+        } else if (apiData.data.list && Array.isArray(apiData.data.list)) {
+          productList = apiData.data.list;
+        } else if (apiData.data.items && Array.isArray(apiData.data.items)) {
+          productList = apiData.data.items;
+        } else if (apiData.data.products && Array.isArray(apiData.data.products)) {
+          productList = apiData.data.products;
+        } else if (apiData.data.data && Array.isArray(apiData.data.data)) {
+          productList = apiData.data.data;
+        }
+      } else if (apiData?.list && Array.isArray(apiData.list)) {
+        productList = apiData.list;
+      } else if (apiData?.products && Array.isArray(apiData.products)) {
+        productList = apiData.products;
+      } else if (apiData?.items && Array.isArray(apiData.items)) {
+        productList = apiData.items;
+      } else if (apiData?.result && Array.isArray(apiData.result)) {
+        productList = apiData.result;
+      } else if (apiData?.records && Array.isArray(apiData.records)) {
+        productList = apiData.records;
+      } else if (apiData?.props && apiData.props.pageProps) {
+        // Estrutura Next.js
+        const pageProps = apiData.props.pageProps;
+        if (pageProps.products && Array.isArray(pageProps.products)) {
+          productList = pageProps.products;
+        } else if (pageProps.items && Array.isArray(pageProps.items)) {
+          productList = pageProps.items;
+        } else if (pageProps.data && Array.isArray(pageProps.data)) {
+          productList = pageProps.data;
+        }
       }
     }
     
@@ -1855,38 +1889,53 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
     if (apiResponses.length > 0) {
       logger.info(`[Kalodata] ✅ Tentando extrair produtos de ${apiResponses.length} respostas de API interceptadas...`);
       logger.info(`[Kalodata] 📋 APIs interceptadas:`, apiResponses.map(r => r.url.substring(0, 80)).join(', '));
-      // Priorizar APIs que contêm produtos principais
+      
+      // Priorizar APIs que contêm produtos principais (versão gratuita usa allLastDay e firstDay0)
+      const allLastDayApi = apiResponses.find(r => r.url.includes('/api/allLastDay'));
+      const firstDay0Api = apiResponses.find(r => r.url.includes('/api/firstDay0'));
       const queryListApi = apiResponses.find(r => r.url.includes('/product/queryList'));
       const productTopsApi = apiResponses.find(r => r.url.includes('/overview/rank/queryProductTops'));
-      const otherApis = apiResponses.filter(r => 
-        !r.url.includes('/product/queryList') && 
-        !r.url.includes('/overview/rank/queryProductTops')
-      );
       
-      // Processar primeiro a API principal /product/queryList
-      if (queryListApi) {
+      // Processar primeiro a API allLastDay (versão gratuita - TOP produtos do dia)
+      if (allLastDayApi) {
+        try {
+          logger.info(`[Kalodata] 🎯 Processando API allLastDay (TOP produtos do dia): ${allLastDayApi.url.substring(0, 100)}`);
+          const apiProducts = extractProductsFromApiResponse(allLastDayApi.data, allLastDayApi.url);
+          if (apiProducts.length > 0) {
+            logger.info(`[Kalodata] ✅ Extraídos ${apiProducts.length} produtos da API allLastDay`);
+            products = products.concat(apiProducts);
+          } else {
+            logger.warn(`[Kalodata] ⚠️ API allLastDay não retornou produtos. Verificando estrutura...`);
+            // Log estrutura para debug
+            logger.info(`[Kalodata] Estrutura allLastDay:`, JSON.stringify(Object.keys(allLastDayApi.data || {})).substring(0, 200));
+          }
+        } catch (e) {
+          logger.warn(`[Kalodata] Erro ao extrair produtos da API allLastDay: ${e.message}`);
+        }
+      }
+      
+      // Processar também a API firstDay0 (pode conter produtos adicionais)
+      if (firstDay0Api && products.length === 0) {
+        try {
+          logger.info(`[Kalodata] 🎯 Processando API firstDay0: ${firstDay0Api.url.substring(0, 100)}`);
+          const apiProducts = extractProductsFromApiResponse(firstDay0Api.data, firstDay0Api.url);
+          if (apiProducts.length > 0) {
+            logger.info(`[Kalodata] ✅ Extraídos ${apiProducts.length} produtos da API firstDay0`);
+            products = products.concat(apiProducts);
+          }
+        } catch (e) {
+          logger.warn(`[Kalodata] Erro ao extrair produtos da API firstDay0: ${e.message}`);
+        }
+      }
+      
+      // Processar API /product/queryList (versão paga)
+      if (queryListApi && products.length === 0) {
         try {
           logger.info(`[Kalodata] 🎯 Processando API principal: ${queryListApi.url.substring(0, 100)}`);
           const apiProducts = extractProductsFromApiResponse(queryListApi.data, queryListApi.url);
           if (apiProducts.length > 0) {
             logger.info(`[Kalodata] ✅ Extraídos ${apiProducts.length} produtos da API principal /product/queryList`);
             products = products.concat(apiProducts);
-          } else {
-            logger.warn(`[Kalodata] ⚠️ API /product/queryList não retornou produtos. Salvando estrutura para debug...`);
-            // Salvar estrutura para debug
-            try {
-              const fs = require('fs');
-              const path = require('path');
-              const debugDir = path.join(__dirname, '../../logs');
-              if (!fs.existsSync(debugDir)) {
-                fs.mkdirSync(debugDir, { recursive: true });
-              }
-              const debugFile = path.join(debugDir, `kalodata_querylist_${Date.now()}.json`);
-              fs.writeFileSync(debugFile, JSON.stringify(queryListApi.data, null, 2), 'utf-8');
-              logger.info(`[Kalodata] Estrutura da API salva em: ${debugFile}`);
-            } catch (e) {
-              // Ignorar erro ao salvar
-            }
           }
         } catch (e) {
           logger.warn(`[Kalodata] Erro ao extrair produtos da API principal: ${e.message}`);
@@ -1907,9 +1956,27 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
         }
       }
       
-      // NÃO processar outras APIs - apenas APIs específicas de produtos
-      // Ignorar filtros, configurações, pagamentos, etc.
-      logger.info(`[Kalodata] ⚠️ Ignorando ${otherApis.length} APIs que não são de produtos (filtros, configurações, etc.)`);
+      // Se ainda não encontrou produtos, salvar todas as APIs para debug
+      if (products.length === 0) {
+        logger.warn(`[Kalodata] ⚠️ Nenhum produto extraído das APIs. Salvando todas as respostas para análise...`);
+        try {
+          const fs = require('fs');
+          const path = require('path');
+          const debugDir = path.join(__dirname, '../../logs');
+          if (!fs.existsSync(debugDir)) {
+            fs.mkdirSync(debugDir, { recursive: true });
+          }
+          const debugFile = path.join(debugDir, `kalodata_all_apis_${Date.now()}.json`);
+          fs.writeFileSync(debugFile, JSON.stringify(apiResponses.map(r => ({
+            url: r.url,
+            keys: Object.keys(r.data || {}),
+            sample: JSON.stringify(r.data).substring(0, 500)
+          })), null, 2), 'utf-8');
+          logger.info(`[Kalodata] Estruturas das APIs salvas em: ${debugFile}`);
+        } catch (e) {
+          // Ignorar erro ao salvar
+        }
+      }
     } else {
       logger.warn(`[Kalodata] ⚠️ Nenhuma API foi interceptada. Verificando se há requisições pendentes...`);
       // Aguardar mais um pouco e verificar novamente
