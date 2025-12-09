@@ -1,0 +1,86 @@
+# ============================================
+# ATUALIZAR CÓDIGO NA VPS - AGORA
+# ============================================
+
+# ✅ Código foi commitado e enviado para GitHub
+# Agora precisa atualizar na VPS
+
+# ============================================
+# COMANDOS PARA EXECUTAR NA VPS
+# ============================================
+
+# 1. Conectar na VPS
+ssh root@72.62.9.29
+
+# 2. Ir para o diretório do projeto
+cd /root/saitec-automation
+
+# 3. Parar processos travados
+pm2 delete all
+
+# 4. Atualizar código do GitHub
+git pull origin main
+
+# Verificar se atualizou:
+git log --oneline -3
+
+# Deve mostrar: "Fix: Melhorar bypass do Cloudflare..."
+
+# 5. Verificar se código foi atualizado
+grep -n "cloudflareBlocked = false" src/scrapers/kalodataScraper.js
+
+# Deve mostrar uma linha com o código novo
+
+# 6. Reiniciar servidor
+pm2 start server.js --name saitec-automation --update-env
+pm2 save
+
+# 7. Monitorar logs em tempo real
+pm2 logs saitec-automation --lines 0
+
+# 8. Em outro terminal, testar:
+curl http://localhost:3000/shop/top-products?source=kalodata&limit=10
+
+# ============================================
+# O QUE FOI MELHORADO
+# ============================================
+
+# ✅ Detecção ANTECIPADA do Cloudflare (antes de continuar)
+# ✅ Aguarda até 3 minutos para Cloudflare resolver automaticamente
+# ✅ Flags anti-detecção adicionadas ao Puppeteer
+# ✅ Propriedades JavaScript para evitar detecção de bot
+# ✅ User agent e headers melhorados
+# ✅ Recarrega página se Cloudflare não resolver após 10 tentativas
+
+# ============================================
+# SE AINDA BLOQUEAR PELO CLOUDFLARE
+# ============================================
+
+# O Cloudflare pode ser muito rigoroso. Nesse caso:
+
+# 1. Fazer login manual UMA VEZ para salvar cookies válidos:
+nano .env
+# Mude: KALODATA_HEADLESS=false
+pm2 restart saitec-automation
+
+# 2. Acessar VPS via VNC ou SSH com X11 forwarding
+# 3. Fazer login manualmente no Kalodata
+# 4. Cookies serão salvos automaticamente
+# 5. Depois, voltar para headless:
+# KALODATA_HEADLESS=true
+# pm2 restart saitec-automation
+
+# ============================================
+# VERIFICAR SE FUNCIONOU
+# ============================================
+
+# Nos logs, deve aparecer:
+# ✅ [Kalodata] ✅ Cloudflare não detectado ou já resolvido
+# ✅ [Kalodata] ✅ Login bem-sucedido usando cookies salvos!
+# ✅ [Kalodata] ✅ Página carregada com sucesso
+# ✅ [Kalodata] ✅ Coletados X produtos mais vendidos
+
+# Se aparecer:
+# ❌ [Kalodata] ❌ Página ainda está bloqueada pelo Cloudflare
+# → Precisa fazer login manual uma vez
+

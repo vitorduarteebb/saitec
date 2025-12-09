@@ -863,7 +863,8 @@ app.get('/shop/top-products', apiLimiter, async (req, res) => {
       category = null,
       country = process.env.DEFAULT_COUNTRY || 'BR',
       limit = 20,
-      source = 'kalodata' // Padrão: Kalodata
+      source = 'kalodata', // Padrão: Kalodata
+      forceVisible = false // Forçar modo visível para login manual
     } = req.query;
 
     const limitNum = parseInt(limit);
@@ -874,24 +875,43 @@ app.get('/shop/top-products', apiLimiter, async (req, res) => {
       });
     }
 
-    logger.info(`[API] Buscando produtos mais vendidos - Fonte: ${source}, Categoria: ${category || 'Todas'}, País: ${country}, Limite: ${limitNum}`);
+    // Se forceVisible=true, temporariamente forçar modo visível
+    const originalHeadless = process.env.KALODATA_HEADLESS;
+    if (forceVisible === 'true' || forceVisible === true) {
+      logger.info(`[API] ⚠️ Modo login manual ativado (forceVisible=true). Forçando modo visível...`);
+      process.env.KALODATA_HEADLESS = 'false';
+      process.env.FORCE_VISIBLE = 'true'; // Flag adicional para o scraper saber que é modo manual
+      logger.info(`[API] ⚠️ IMPORTANTE: O navegador será aberto na VPS. Faça login manualmente se necessário.`);
+      logger.info(`[API] ⚠️ O sistema aguardará até 5 minutos para login manual.`);
+    }
+
+    logger.info(`[API] Buscando produtos mais vendidos - Fonte: ${source}, Categoria: ${category || 'Todas'}, País: ${country}, Limite: ${limitNum}, Modo Visível: ${forceVisible === 'true' || forceVisible === true}`);
 
     let products = [];
     
-    if (source === 'kalodata') {
-      // Usar Kalodata (padrão)
-      products = await getKalodataTopProducts({
-        category,
-        country,
-        limit: limitNum
-      });
-    } else {
-      // Usar TikTok Shop direto
-      products = await getTikTokShopTopProducts({
-        category,
-        country,
-        limit: limitNum
-      });
+    try {
+      if (source === 'kalodata') {
+        // Usar Kalodata (padrão)
+        products = await getKalodataTopProducts({
+          category,
+          country,
+          limit: limitNum
+        });
+      } else {
+        // Usar TikTok Shop direto
+        products = await getTikTokShopTopProducts({
+          category,
+          country,
+          limit: limitNum
+        });
+      }
+    } finally {
+      // Restaurar configuração original
+      if (forceVisible === 'true' || forceVisible === true) {
+        process.env.KALODATA_HEADLESS = originalHeadless;
+        delete process.env.FORCE_VISIBLE;
+        logger.info(`[API] ✅ Modo login manual concluído. Restaurando configuração original.`);
+      }
     }
 
     // Salvar produtos automaticamente no banco de dados

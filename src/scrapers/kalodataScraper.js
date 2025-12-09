@@ -212,9 +212,14 @@ async function loginKalodata(page) {
     logger.info('[Kalodata] ⚠️ Por favor, faça login manualmente no navegador...');
     logger.info('[Kalodata] ⚠️ Configure KALODATA_EMAIL e KALODATA_PASSWORD no .env para login automático');
     
-    // Aguardar até 2 minutos para login manual
-    const maxWaitTime = 120000; // 2 minutos
+    // Aguardar para login manual (mais tempo se estiver em modo manual)
+    const isManualMode = process.env.FORCE_VISIBLE === 'true';
+    const maxWaitTime = isManualMode ? 300000 : 120000; // 5 minutos em modo manual, 2 minutos normal
     const startTime = Date.now();
+    
+    if (isManualMode) {
+      logger.info(`[Kalodata] ⏳ Aguardando até ${Math.floor(maxWaitTime/1000/60)} minutos para login manual...`);
+    }
     
     while (Date.now() - startTime < maxWaitTime) {
       await randomDelay(3000, 5000);
@@ -223,9 +228,15 @@ async function loginKalodata(page) {
         await saveCookies(page);
         return true;
       }
+      
+      // Log de progresso a cada 30 segundos em modo manual
+      if (isManualMode && (Date.now() - startTime) % 30000 < 5000) {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        logger.info(`[Kalodata] ⏳ Aguardando login manual... (${elapsed}s/${Math.floor(maxWaitTime/1000)}s)`);
+      }
     }
     
-    logger.warn('[Kalodata] ⚠️ Timeout aguardando login manual.');
+    logger.warn(`[Kalodata] ⚠️ Timeout aguardando login manual (aguardou ${Math.floor((Date.now() - startTime)/1000)}s).`);
     return false;
   } catch (error) {
     logger.error(`[Kalodata] Erro no processo de login: ${error.message}`);
@@ -1175,6 +1186,14 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
   scrapingLock = true;
   const lockStartTime = Date.now();
   
+  // Verificar se está em modo login manual (forceVisible)
+  const isManualLoginMode = process.env.KALODATA_HEADLESS === 'false' && process.env.FORCE_VISIBLE === 'true';
+  if (isManualLoginMode) {
+    logger.info(`[Kalodata] 🔐 MODO LOGIN MANUAL ATIVADO`);
+    logger.info(`[Kalodata] ⚠️ O navegador será aberto na VPS. Por favor, faça login manualmente no Kalodata.`);
+    logger.info(`[Kalodata] ⚠️ O sistema aguardará até 5 minutos para você completar o login.`);
+  }
+  
   logger.info(`[Kalodata] ==========================================`);
   logger.info(`[Kalodata] 🛍️ INICIANDO SCRAPING - PRODUTOS MAIS VENDIDOS`);
   logger.info(`[Kalodata] 📍 País: ${country}, Categoria: ${category || 'Todas'}`);
@@ -1346,14 +1365,30 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
     // SEMPRE solicitar login antes de coletar produtos
     // Mesmo que cookies existam, precisamos garantir que está realmente logado
     logger.info(`[Kalodata] 🔐 Verificando login e solicitando autenticação...`);
-    logger.info(`[Kalodata] ⚠️ IMPORTANTE: Faça login manualmente no navegador se necessário`);
+    
+    // Se está em modo login manual, dar mais tempo e instruções claras
+    const isManualLoginMode = process.env.KALODATA_HEADLESS === 'false';
+    if (isManualLoginMode) {
+      logger.info(`[Kalodata] 🔐 MODO LOGIN MANUAL: O navegador está aberto na VPS`);
+      logger.info(`[Kalodata] ⚠️ Por favor, faça login manualmente no Kalodata no navegador aberto`);
+      logger.info(`[Kalodata] ⚠️ O sistema aguardará até 5 minutos para você completar o login`);
+      logger.info(`[Kalodata] ⚠️ Após o login, a coleta continuará automaticamente`);
+    } else {
+      logger.info(`[Kalodata] ⚠️ IMPORTANTE: Faça login manualmente no navegador se necessário`);
+    }
     
     const loginSuccess = await loginKalodata(page);
     
     if (!loginSuccess) {
-      logger.error(`[Kalodata] ❌ Login não foi concluído!`);
-      logger.error(`[Kalodata] ⚠️ Por favor, faça login manualmente no navegador e tente novamente`);
-      logger.error(`[Kalodata] ⚠️ Ou configure KALODATA_EMAIL e KALODATA_PASSWORD no .env para login automático`);
+      if (isManualLoginMode) {
+        logger.error(`[Kalodata] ❌ Login não foi concluído após 5 minutos!`);
+        logger.error(`[Kalodata] ⚠️ Por favor, faça login manualmente no navegador aberto na VPS`);
+        logger.error(`[Kalodata] ⚠️ Ou configure KALODATA_EMAIL e KALODATA_PASSWORD no .env para login automático`);
+      } else {
+        logger.error(`[Kalodata] ❌ Login não foi concluído!`);
+        logger.error(`[Kalodata] ⚠️ Por favor, faça login manualmente no navegador e tente novamente`);
+        logger.error(`[Kalodata] ⚠️ Ou configure KALODATA_EMAIL e KALODATA_PASSWORD no .env para login automático`);
+      }
       throw new Error('Login no Kalodata não foi concluído. É necessário estar logado para coletar produtos.');
     }
     
