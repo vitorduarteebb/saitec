@@ -1,0 +1,175 @@
+{
+  "name": "WF_TRENDS_DAILY_TOP20",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10,15,21 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron - Coleta Diária",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/trends/collect-and-save",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "niche",
+              "value": "beleza"
+            },
+            {
+              "name": "country",
+              "value": "BR"
+            },
+            {
+              "name": "limit",
+              "value": "20"
+            },
+            {
+              "name": "sources",
+              "value": "tiktok_cc,pipiads"
+            },
+            {
+              "name": "minViews",
+              "value": "50000"
+            },
+            {
+              "name": "language",
+              "value": "pt"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-request-collect",
+      "name": "Coletar Top 20 Tendências",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filtros adicionais opcionais\nconst items = $input.item.json.data || [];\n\n// Blacklist adicional (se necessário)\nconst blacklist = ['palavra1', 'palavra2'];\n\nconst filtered = items.filter(i => {\n  const text = (i.title + ' ' + (i.description || '')).toLowerCase();\n  return !blacklist.some(b => text.includes(b));\n});\n\nreturn filtered.map(i => ({ json: i }));"
+      },
+      "id": "function-filter",
+      "name": "Aplicar Filtros Adicionais",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "generateFromFile",
+        "filePropertyName": "data",
+        "options": {
+          "delimiter": ",",
+          "fromFile": false,
+          "fileName": "trends-{{ $now.format('YYYY-MM-DD') }}-top20.csv",
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "source": "={{ $json.source }}",
+              "niche": "={{ $json.niche }}",
+              "title": "={{ $json.title }}",
+              "views": "={{ $json.views }}",
+              "likes": "={{ $json.likes }}",
+              "comments": "={{ $json.comments }}",
+              "shares": "={{ $json.shares }}",
+              "engagementScore": "={{ $json.engagementScore }}",
+              "videoUrl": "={{ $json.videoUrl }}",
+              "authorHandle": "={{ $json.authorHandle }}",
+              "collectedAt": "={{ $json.collectedAt }}"
+            }
+          }
+        }
+      },
+      "id": "generate-csv",
+      "name": "Gerar CSV",
+      "type": "n8n-nodes-base.csv",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "trends/{{ $now.format('YYYY-MM-DD') }}-top20.csv",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "save-csv",
+      "name": "Salvar CSV",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Cron - Coleta Diária": {
+      "main": [
+        [
+          {
+            "node": "Coletar Top 20 Tendências",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Coletar Top 20 Tendências": {
+      "main": [
+        [
+          {
+            "node": "Aplicar Filtros Adicionais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aplicar Filtros Adicionais": {
+      "main": [
+        [
+          {
+            "node": "Gerar CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar CSV": {
+      "main": [
+        [
+          {
+            "node": "Salvar CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-22T10:00:00.000Z",
+  "versionId": "1"
+}
+

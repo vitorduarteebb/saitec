@@ -1,0 +1,55 @@
+# Dependências
+node_modules/
+package-lock.json
+
+# Variáveis de ambiente
+.env
+.env.local
+.env.production
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Arquivos gerados
+exports/
+*.csv
+
+# Cookies e sessões (contêm dados sensíveis)
+cookies/
+*.cookies.json
+
+# Arquivos de debug temporários
+logs/kalodata_*.html
+logs/kalodata_*.json
+logs/tiktok_*.html
+logs/tiktok_*.json
+logs/*_debug_*.html
+logs/*_debug_*.json
+logs/*_api_responses_*.json
+logs/*_querylist_*.json
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporários
+tmp/
+temp/
+*.tmp
+
+# Arquivos de teste e desenvolvimento
+test/
+tests/
+*.test.js
+*.spec.js

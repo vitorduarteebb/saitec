@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # Aplicação Node.js
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tiktok-trends-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Servidor
+      - NODE_ENV=production
+      - PORT=3000
+      
+      # Banco de Dados (conecta ao serviço mysql abaixo)
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=trends_user
+      - DB_PASSWORD=senha_forte_aqui_mude
+      - DB_NAME=saitec_trends
+      
+      # Segurança
+      - INTERNAL_API_TOKEN=seu_token_forte_aqui_mude
+      - PANEL_ACCESS_TOKEN=seu_token_painel_forte_aqui_mude
+      - CORS_ORIGIN=*
+      - RATE_LIMIT_MAX=100
+      
+      # Coleta
+      - DEFAULT_NICHE=beleza
+      - DEFAULT_COUNTRY=BR
+      - MIN_VIEWS=50000
+      
+      # Score
+      - VIEWS_WEIGHT=0.1
+      - LIKES_WEIGHT=3
+      - COMMENTS_WEIGHT=4
+      - SHARES_WEIGHT=5
+      
+      # Anti-bloqueio
+      - DELAY_MIN_MS=1000
+      - DELAY_MAX_MS=3000
+      - DELAY_BETWEEN_MIN_MS=3000
+      - DELAY_BETWEEN_MAX_MS=6000
+      - PUPPETEER_TIMEOUT=30000
+      - PAGE_TIMEOUT=30000
+      - HEADLESS=true
+      
+      # Logs
+      - LOG_LEVEL=info
+    volumes:
+      # Persistir logs fora do container
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - trends-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+
+  # Banco de Dados MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: tiktok-trends-mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_senha_forte_aqui_mude
+      - MYSQL_DATABASE=saitec_trends
+      - MYSQL_USER=trends_user
+      - MYSQL_PASSWORD=senha_forte_aqui_mude
+    ports:
+      - "3306:3306"
+    volumes:
+      # Persistir dados do banco
+      - mysql_data:/var/lib/mysql
+      # Script de inicialização (opcional)
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    networks:
+      - trends-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: --default-authentication-plugin=mysql_native_password
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  trends-network:
+    driver: bridge
+

@@ -1,0 +1,408 @@
+(() => {
+  'use strict';
+  var e = {
+      788: e => {
+        e.exports = function (e) {
+          var t = [];
+          return (
+            (t.toString = function () {
+              return this.map(function (t) {
+                var n = '',
+                  o = void 0 !== t[5];
+                return (
+                  t[4] && (n += '@supports ('.concat(t[4], ') {')),
+                  t[2] && (n += '@media '.concat(t[2], ' {')),
+                  o &&
+                    (n += '@layer'.concat(t[5].length > 0 ? ' '.concat(t[5]) : '', ' {')),
+                  (n += e(t)),
+                  o && (n += '}'),
+                  t[2] && (n += '}'),
+                  t[4] && (n += '}'),
+                  n
+                );
+              }).join('');
+            }),
+            (t.i = function (e, n, o, r, s) {
+              'string' == typeof e && (e = [[null, e, void 0]]);
+              var i = {};
+              if (o)
+                for (var a = 0; a < this.length; a++) {
+                  var c = this[a][0];
+                  null != c && (i[c] = !0);
+                }
+              for (var l = 0; l < e.length; l++) {
+                var d = [].concat(e[l]);
+                (o && i[d[0]]) ||
+                  (void 0 !== s &&
+                    (void 0 === d[5] ||
+                      (d[1] = '@layer'
+                        .concat(d[5].length > 0 ? ' '.concat(d[5]) : '', ' {')
+                        .concat(d[1], '}')),
+                    (d[5] = s)),
+                  n &&
+                    (d[2]
+                      ? ((d[1] = '@media '.concat(d[2], ' {').concat(d[1], '}')),
+                        (d[2] = n))
+                      : (d[2] = n)),
+                  r &&
+                    (d[4]
+                      ? ((d[1] = '@supports ('.concat(d[4], ') {').concat(d[1], '}')),
+                        (d[4] = r))
+                      : (d[4] = ''.concat(r))),
+                  t.push(d));
+              }
+            }),
+            t
+          );
+        };
+      },
+      52: e => {
+        e.exports = function (e) {
+          return e[1];
+        };
+      },
+      890: (e, t, n) => {
+        n.d(t, { Z: () => a });
+        var o = n(52),
+          r = n.n(o),
+          s = n(788),
+          i = n.n(s)()(r());
+        i.push([
+          e.id,
+          '.msg__wrap {\n  position: fixed;\n  top: 10%;\n  left: 50%;\n  z-index: 1000;\n  transition: all 0.3s;\n  transform: translate(-50%, -50%) scale(0, 0);\n  max-width: 50%;\n  border-radius: 4px;\n\n  background: #fff;\n  box-shadow: 0 0 10px #eee;\n  font-size: 10px;\n}\n\n/* 弹出框头部 */\n.msg__wrap .msg-header {\n  padding: 10px 10px 0 10px;\n  font-size: 1.8em;\n}\n\n.msg__wrap .msg-header .msg-header-close-button {\n  float: right;\n  cursor: pointer;\n}\n\n/* 弹出框中部 */\n.msg__wrap .msg-body {\n  padding: 10px 10px 10px 10px;\n  display: flex;\n}\n\n/* 图标 */\n.msg__wrap .msg-body .msg-body-icon {\n  width: 20px;\n}\n\n.msg__wrap .msg-body .msg-body-icon div {\n  width: 20px;\n  height: 20px;\n  margin: 0 auto;\n  color: #ffa900;\n  border-radius: 50% 50%;\n  font-size: 2em;\n}\n\n.msg__wrap .msg-body .msg-body-icon .msg-body-icon-success {\n  background: #32a323;\n  text-align: center;\n}\n\n/* 内容 */\n.msg__wrap .msg-body .msg-body-content {\n  min-width: 200px;\n  font-size: 1.5em;\n  word-break: break-all;\n  display: flex;\n  align-items: center;\n  padding-left: 10px;\n  box-sizing: border-box;\n}\n\n/* 弹出框底部 */\n.msg__wrap .msg-footer {\n  padding: 0 10px 10px 10px;\n  display: flex;\n  flex-direction: row-reverse;\n}\n\n.msg__wrap .msg-footer .msg-footer-btn {\n  height: 30px;\n  border: 0 none;\n  color: #fff;\n  outline: none;\n  font-size: 1em;\n  padding-left: 10px;\n  padding-right: 10px;\n  border-radius: 2px;\n  margin-left: 5px;\n  cursor: pointer;\n}\n\n.msg__wrap .msg-footer .msg-footer-confirm-button {\n  background-color: #fe2c55;\n}\n\n.msg__wrap .msg-footer .msg-footer-confirm-button:active {\n  background-color: #fe6583;\n}\n',
+          '',
+        ]);
+        const a = i;
+      },
+      379: e => {
+        var t = [];
+        function n(e) {
+          for (var n = -1, o = 0; o < t.length; o++)
+            if (t[o].identifier === e) {
+              n = o;
+              break;
+            }
+          return n;
+        }
+        function o(e, o) {
+          for (var s = {}, i = [], a = 0; a < e.length; a++) {
+            var c = e[a],
+              l = o.base ? c[0] + o.base : c[0],
+              d = s[l] || 0,
+              p = ''.concat(l, ' ').concat(d);
+            s[l] = d + 1;
+            var u = n(p),
+              f = {
+                css: c[1],
+                media: c[2],
+                sourceMap: c[3],
+                supports: c[4],
+                layer: c[5],
+              };
+            if (-1 !== u) t[u].references++, t[u].updater(f);
+            else {
+              var m = r(f, o);
+              (o.byIndex = a),
+                t.splice(a, 0, { identifier: p, updater: m, references: 1 });
+            }
+            i.push(p);
+          }
+          return i;
+        }
+        function r(e, t) {
+          var n = t.domAPI(t);
+          return (
+            n.update(e),
+            function (t) {
+              if (t) {
+                if (
+                  t.css === e.css &&
+                  t.media === e.media &&
+                  t.sourceMap === e.sourceMap &&
+                  t.supports === e.supports &&
+                  t.layer === e.layer
+                )
+                  return;
+                n.update((e = t));
+              } else n.remove();
+            }
+          );
+        }
+        e.exports = function (e, r) {
+          var s = o((e = e || []), (r = r || {}));
+          return function (e) {
+            e = e || [];
+            for (var i = 0; i < s.length; i++) {
+              var a = n(s[i]);
+              t[a].references--;
+            }
+            for (var c = o(e, r), l = 0; l < s.length; l++) {
+              var d = n(s[l]);
+              0 === t[d].references && (t[d].updater(), t.splice(d, 1));
+            }
+            s = c;
+          };
+        };
+      },
+      569: e => {
+        var t = {};
+        e.exports = function (e, n) {
+          var o = (function (e) {
+            if (void 0 === t[e]) {
+              var n = document.querySelector(e);
+              if (window.HTMLIFrameElement && n instanceof window.HTMLIFrameElement)
+                try {
+                  n = n.contentDocument.head;
+                } catch (e) {
+                  n = null;
+                }
+              t[e] = n;
+            }
+            return t[e];
+          })(e);
+          if (!o)
+            throw new Error(
+              "Couldn't find a style target. This probably means that the value for the 'insert' parameter is invalid."
+            );
+          o.appendChild(n);
+        };
+      },
+      216: e => {
+        e.exports = function (e) {
+          var t = document.createElement('style');
+          return e.setAttributes(t, e.attributes), e.insert(t, e.options), t;
+        };
+      },
+      565: (e, t, n) => {
+        e.exports = function (e) {
+          var t = n.nc;
+          t && e.setAttribute('nonce', t);
+        };
+      },
+      795: e => {
+        e.exports = function (e) {
+          var t = e.insertStyleElement(e);
+          return {
+            update: function (n) {
+              !(function (e, t, n) {
+                var o = '';
+                n.supports && (o += '@supports ('.concat(n.supports, ') {')),
+                  n.media && (o += '@media '.concat(n.media, ' {'));
+                var r = void 0 !== n.layer;
+                r &&
+                  (o += '@layer'.concat(
+                    n.layer.length > 0 ? ' '.concat(n.layer) : '',
+                    ' {'
+                  )),
+                  (o += n.css),
+                  r && (o += '}'),
+                  n.media && (o += '}'),
+                  n.supports && (o += '}');
+                var s = n.sourceMap;
+                s &&
+                  'undefined' != typeof btoa &&
+                  (o += '\n/*# sourceMappingURL=data:application/json;base64,'.concat(
+                    btoa(unescape(encodeURIComponent(JSON.stringify(s)))),
+                    ' */'
+                  )),
+                  t.styleTagTransform(o, e, t.options);
+              })(t, e, n);
+            },
+            remove: function () {
+              !(function (e) {
+                if (null === e.parentNode) return !1;
+                e.parentNode.removeChild(e);
+              })(t);
+            },
+          };
+        };
+      },
+      589: e => {
+        e.exports = function (e, t) {
+          if (t.styleSheet) t.styleSheet.cssText = e;
+          else {
+            for (; t.firstChild; ) t.removeChild(t.firstChild);
+            t.appendChild(document.createTextNode(e));
+          }
+        };
+      },
+    },
+    t = {};
+  function n(o) {
+    var r = t[o];
+    if (void 0 !== r) return r.exports;
+    var s = (t[o] = { id: o, exports: {} });
+    return e[o](s, s.exports, n), s.exports;
+  }
+  (n.n = e => {
+    var t = e && e.__esModule ? () => e.default : () => e;
+    return n.d(t, { a: t }), t;
+  }),
+    (n.d = (e, t) => {
+      for (var o in t)
+        n.o(t, o) &&
+          !n.o(e, o) &&
+          Object.defineProperty(e, o, { enumerable: !0, get: t[o] });
+    }),
+    (n.o = (e, t) => Object.prototype.hasOwnProperty.call(e, t)),
+    (n.nc = void 0),
+    (() => {
+      var e = n(379),
+        t = n.n(e),
+        o = n(795),
+        r = n.n(o),
+        s = n(569),
+        i = n.n(s),
+        a = n(565),
+        c = n.n(a),
+        l = n(216),
+        d = n.n(l),
+        p = n(589),
+        u = n.n(p),
+        f = n(890),
+        m = {};
+      (m.styleTagTransform = u()),
+        (m.setAttributes = c()),
+        (m.insert = i().bind(null, 'head')),
+        (m.domAPI = r()),
+        (m.insertStyleElement = d()),
+        t()(f.Z, m),
+        f.Z && f.Z.locals && f.Z.locals;
+      const h =
+          '我们检测到您的浏览器可能安装了AdBlock或AdBlock  Plus等拦截插件，他们的部分策略可能影响系统的正常使用。您可以进入浏览器-扩展程序，解除该插件对本系统的阻止，以便我们更好地为您服务。',
+        g = {
+          'zh-CN': h,
+          zh: h,
+          ja: 'AdBlockやAdBlock  Plusなどの広告ブロックプラグインがブラウザにインストールされていることが検出されました。これらの機能の一部により、本システムを正常に使用できないおそれがあります。パフォーマンスを向上するには、[ブラウザ  - 詳細設定]で、該当するプラグインを無効に設定してください。',
+        };
+      const y = { 'zh-CN': '确定', zh: '确定', ja: '確認する' };
+      !(async function () {
+        try {
+          const a = await Promise.all([
+            fetch(
+              'https://sf-static.tiktokcdn.com/obj/static-sg/ads/creative_hub_i18n/_next/static/chunks/pages/inspiration/topads/%5BdeviceType%5D/%5Blocale%5D-c15cbc109c5df1b54d95.js'
+            ),
+            fetch(
+              'https://p16-cc-sg.tiktokcdn.com/tos-alisg-i-hdprqziq2y/top_ads/0cc2b228eff581a85f243dd407f4543b.png~tplv-hdprqziq2y-webp.webp'
+            ),
+            fetch(
+              'https://p16-cc-sg.tiktokcdn.com/tos-alisg-i-hdprqziq2y/ads/ebe4078f2954a620e71688ded376afbc.png~tplv-hdprqziq2y-webp.webp'
+            ),
+          ]);
+          if (!a.every(Boolean)) throw new Error();
+        } catch (e) {
+          const t =
+              (function (e) {
+                const t = document.cookie.split('; ');
+                for (let e = 0; e < t.length; e++) {
+                  const n = t[e].split('=');
+                  if ('lang_type' == n[0]) return n[1];
+                }
+                return '';
+              })() || 'en',
+            n =
+              g[t] ||
+              'We have detected that  ad prevention plugins like AdBlock or AdBlock Plus may be installed on your  browser. Some of their functions may interfere with normal use of this  system. You can go to Browser-Advanced Settings and disable these plugins to  allow us to better serve you.',
+            o = function (e) {
+              this._init(e);
+            };
+          (o.prototype = {
+            _init({
+              content: e = '',
+              type: t = 'info',
+              useHTML: n = !1,
+              showIcon: o = !0,
+              confirm: r = null,
+              cancle: s = null,
+              footer: i = !0,
+              header: a = !1,
+              title: c = '提示',
+              contentStyle: l = {},
+              contentFontSize: d = '1.5em',
+              btnName: p = ['确定', '取消'],
+            }) {
+              (this.content = e),
+                (this.type = t),
+                (this.useHTML = n),
+                (this.showIcon = o),
+                (this.confirm = r),
+                (this.cancle = s),
+                (this.footer = i),
+                (this.header = a),
+                (this.title = c),
+                (this.contentStyle = l),
+                (this.contentFontSize = d),
+                (this.btnName = p),
+                this._creatElement(),
+                this._show({ el: this._el, overlay: this._overlay }),
+                this._bind({ el: this._el, overlay: this._overlay });
+            },
+            _creatElement() {
+              const e = document.createElement('div');
+              e.className = 'msg__wrap';
+              const [t, n] = this.btnName,
+                o = `${
+                  this.header
+                    ? `<div class="msg-header">\n                            <span>${this.title}</span>\n                            <span class="msg-header-close-button">×</span>\n                        </div>`
+                    : ''
+                }\n                <div class="msg-body">\n                    ${
+                  this.showIcon
+                    ? '<div class="msg-body-icon">\n                        <div class="msg__icon__color"><svg width="1em" height="1em" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><g stroke="none" stroke-width="4" fill="none" fill-rule="evenodd"><g><path d="M24,44 C29.5228475,44 34.5228475,41.7614237 38.1421356,38.1421356 C41.7614237,34.5228475 44,29.5228475 44,24 C44,18.4771525 41.7614237,13.4771525 38.1421356,9.85786438 C34.5228475,6.23857625 29.5228475,4 24,4 C18.4771525,4 13.4771525,6.23857625 9.85786438,9.85786438 C6.23857625,13.4771525 4,18.4771525 4,24 C4,29.5228475 6.23857625,34.5228475 9.85786438,38.1421356 C13.4771525,41.7614237 18.4771525,44 24,44 Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round" fill="currentColor" fill-rule="nonzero"></path><g transform="translate(24.500000, 23.000000) scale(1, -1) translate(-24.500000, -23.000000) translate(21.000000, 11.000000)"><g><circle fill="#FFF" cx="3" cy="21.5" r="2.5"></circle><g transform="translate(0.000000, 0.500000)" stroke="#FFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"><polyline points="3.5 0.5 3.5 14.5 2.5 14.5 1.5 14.5"></polyline><path d="M0,0.5 L7,0.5"></path></g></g></g></g></g></svg></div>\n                    </div>'
+                    : ''
+                }\n                    <div class="msg-body-content"></div>\n                </div>\n                ${
+                  this.footer
+                    ? `<div class="msg-footer">\n                            <button class="msg-footer-btn msg-footer-confirm-button">${t}</button>\n                        </div>`
+                    : ''
+                }`;
+              e.innerHTML = o;
+              const r = { fontSize: this.contentFontSize, ...this.contentStyle },
+                s = e.querySelector('.msg-body .msg-body-content');
+              for (const e in r) r.hasOwnProperty(e) && (s.style[e] = r[e]);
+              this.useHTML ? (s.innerHTML = this.content) : (s.innerText = this.content);
+              const i = document.createElement('div');
+              (i.className = 'msg__overlay'), (this._overlay = i), (this._el = e);
+            },
+            _show({ el: e, overlay: t }) {
+              document.body.setAttribute('data-display-adblocker-modal', 'true');
+              document.body.appendChild(e),
+                document.body.appendChild(t),
+                setTimeout(() => {
+                  (e.style.transform = 'translate(-50%,-50%) scale(1,1)'),
+                    (t.style.opacity = '1');
+                });
+            },
+            _close({ el: e, overlay: t }) {
+              document.body.removeAttribute('data-display-adblocker-modal');
+              (e.style.transform = 'translate(-50%,-50%) scale(0,0)'),
+                (t.style.opcity = '0'),
+                setTimeout(() => {
+                  document.body.removeChild(e), document.body.removeChild(t);
+                }, 300);
+            },
+            _bind({ el: e, overlay: t }) {
+              this.header &&
+                e
+                  .querySelector('.msg-header-close-button')
+                  .addEventListener('click', n => {
+                    this.cancle && this.cancle.call(this, n),
+                      this._close({ el: e, overlay: t });
+                  }),
+                this.footer &&
+                  e
+                    .querySelector('.msg-footer-confirm-button')
+                    .addEventListener('click', n => {
+                      this.confirm && this.confirm.call(this, n),
+                        this._close({ el: e, overlay: t });
+                    });
+            },
+          }),
+            new o({
+              content: n,
+              type: 'success',
+              btnName: [y[t] || 'confirm'],
+              confirm: function () {},
+            });
+        }
+      })();
+    })();
+})();
