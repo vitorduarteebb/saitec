@@ -1525,7 +1525,89 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
     // Aguardar mais um pouco para garantir que página carregou completamente
     await randomDelay(5000, 7000);
     
-    // SEMPRE solicitar login antes de coletar produtos
+    // ✅ PROCESSAR APIs ANTES DO LOGIN! (As APIs já foram interceptadas)
+    logger.info(`[Kalodata] 🔍 Processando APIs interceptadas ANTES do login...`);
+    await randomDelay(3000, 5000); // Aguardar um pouco para garantir que todas as APIs foram interceptadas
+    
+    let products = [];
+    if (apiResponses.length > 0) {
+      logger.info(`[Kalodata] ✅ ${apiResponses.length} APIs interceptadas. Processando...`);
+      logger.info(`[Kalodata] 📋 APIs:`, apiResponses.map(r => r.url.substring(r.url.lastIndexOf('/'))).join(', '));
+      
+      // Priorizar APIs que contêm produtos principais (versão gratuita usa allLastDay e firstDay0)
+      const allLastDayApi = apiResponses.find(r => r.url.includes('/api/allLastDay'));
+      const firstDay0Api = apiResponses.find(r => r.url.includes('/api/firstDay0'));
+      const queryListApi = apiResponses.find(r => r.url.includes('/product/queryList'));
+      const productTopsApi = apiResponses.find(r => r.url.includes('/overview/rank/queryProductTops'));
+      
+      // Processar primeiro a API allLastDay (versão gratuita - TOP produtos do dia)
+      if (allLastDayApi) {
+        try {
+          logger.info(`[Kalodata] 🎯 Processando API allLastDay (TOP produtos do dia)...`);
+          const apiProducts = extractProductsFromApiResponse(allLastDayApi.data, allLastDayApi.url);
+          if (apiProducts.length > 0) {
+            logger.info(`[Kalodata] ✅ Extraídos ${apiProducts.length} produtos da API allLastDay`);
+            products = products.concat(apiProducts);
+          } else {
+            logger.warn(`[Kalodata] ⚠️ API allLastDay não retornou produtos. Estrutura:`, JSON.stringify(Object.keys(allLastDayApi.data || {})).substring(0, 200));
+          }
+        } catch (e) {
+          logger.error(`[Kalodata] ❌ Erro ao extrair produtos da API allLastDay: ${e.message}`);
+        }
+      }
+      
+      // Processar também a API firstDay0 (pode conter produtos adicionais)
+      if (firstDay0Api && products.length === 0) {
+        try {
+          logger.info(`[Kalodata] 🎯 Processando API firstDay0...`);
+          const apiProducts = extractProductsFromApiResponse(firstDay0Api.data, firstDay0Api.url);
+          if (apiProducts.length > 0) {
+            logger.info(`[Kalodata] ✅ Extraídos ${apiProducts.length} produtos da API firstDay0`);
+            products = products.concat(apiProducts);
+          }
+        } catch (e) {
+          logger.error(`[Kalodata] ❌ Erro ao extrair produtos da API firstDay0: ${e.message}`);
+        }
+      }
+      
+      // Se encontrou produtos nas APIs, retornar IMEDIATAMENTE sem depender do login/Cloudflare
+      if (products.length > 0) {
+        logger.info(`[Kalodata] 🎉 SUCESSO! ${products.length} produtos coletados das APIs ANTES do login!`);
+        logger.info(`[Kalodata] ✅ Retornando produtos sem depender do HTML bloqueado pelo Cloudflare.`);
+        
+        // Limitar ao número solicitado
+        if (products.length > limit) {
+          products = products.slice(0, limit);
+        }
+        
+        // Retornar produtos encontrados nas APIs
+        return products.map((product) => ({
+          id: product.id,
+          title: product.title,
+          revenue: product.revenue,
+          growthRate: product.growthRate,
+          itemsSold: product.itemsSold,
+          avgPrice: product.avgPrice,
+          commissionRate: product.commissionRate,
+          topVideos: product.topVideos,
+          creators: product.creators,
+          launchDate: product.launchDate,
+          conversionRate: product.conversionRate,
+          productUrl: product.productUrl,
+          imageUrl: product.imageUrl,
+          rank: product.rank || null,
+          source: 'kalodata',
+          category: category || null,
+          country: country || null
+        }));
+      } else {
+        logger.warn(`[Kalodata] ⚠️ APIs interceptadas mas nenhum produto extraído. Continuando com login...`);
+      }
+    } else {
+      logger.warn(`[Kalodata] ⚠️ Nenhuma API interceptada ainda. Continuando com login...`);
+    }
+    
+    // SEMPRE solicitar login antes de coletar produtos (se APIs não retornaram nada)
     // Mesmo que cookies existam, precisamos garantir que está realmente logado
     logger.info(`[Kalodata] 🔐 Verificando login e solicitando autenticação...`);
     
@@ -1878,15 +1960,15 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
     // Aguardar um pouco mais para garantir que tudo carregou
     await randomDelay(5000, 7000);
     
-    // Aguardar mais tempo para APIs carregarem após login
+    // Aguardar mais tempo para APIs carregarem após login (se ainda não encontrou produtos)
     // Após login manual, as APIs podem demorar mais para serem chamadas
-    logger.info(`[Kalodata] Aguardando APIs carregarem produtos após login...`);
-    logger.info(`[Kalodata] ⏳ Aguardando até 20 segundos para garantir que todas as APIs sejam interceptadas...`);
-    await randomDelay(15000, 20000);
-    
-    // Tentar extrair produtos das respostas de API interceptadas primeiro
-    let products = [];
-    if (apiResponses.length > 0) {
+    if (products.length === 0) {
+      logger.info(`[Kalodata] Aguardando APIs carregarem produtos após login...`);
+      logger.info(`[Kalodata] ⏳ Aguardando até 20 segundos para garantir que todas as APIs sejam interceptadas...`);
+      await randomDelay(15000, 20000);
+      
+      // Tentar extrair produtos das respostas de API interceptadas novamente (pode ter novas APIs após login)
+      if (apiResponses.length > 0) {
       logger.info(`[Kalodata] ✅ Tentando extrair produtos de ${apiResponses.length} respostas de API interceptadas...`);
       logger.info(`[Kalodata] 📋 APIs interceptadas:`, apiResponses.map(r => r.url.substring(0, 80)).join(', '));
       
@@ -2006,18 +2088,19 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
           country: country || null
         }));
       }
-    } else {
-      logger.warn(`[Kalodata] ⚠️ Nenhuma API foi interceptada. Verificando se há requisições pendentes...`);
-      // Aguardar mais um pouco e verificar novamente
-      await randomDelay(5000, 8000);
-      
-      // Salvar informações de debug sobre APIs interceptadas
-      if (apiResponses.length === 0) {
-        logger.warn(`[Kalodata] ⚠️ Nenhuma API com produtos foi interceptada. Isso pode indicar que:`);
-        logger.warn(`[Kalodata]   1. A página não carregou completamente`);
-        logger.warn(`[Kalodata]   2. As APIs usam autenticação especial`);
-        logger.warn(`[Kalodata]   3. Os produtos são carregados via WebSocket ou outra tecnologia`);
-        logger.warn(`[Kalodata]   4. A versão gratuita tem limitações que bloqueiam o acesso`);
+      } else {
+        logger.warn(`[Kalodata] ⚠️ Nenhuma API foi interceptada após login. Verificando se há requisições pendentes...`);
+        // Aguardar mais um pouco e verificar novamente
+        await randomDelay(5000, 8000);
+        
+        // Salvar informações de debug sobre APIs interceptadas
+        if (apiResponses.length === 0) {
+          logger.warn(`[Kalodata] ⚠️ Nenhuma API com produtos foi interceptada. Isso pode indicar que:`);
+          logger.warn(`[Kalodata]   1. A página não carregou completamente`);
+          logger.warn(`[Kalodata]   2. As APIs usam autenticação especial`);
+          logger.warn(`[Kalodata]   3. Os produtos são carregados via WebSocket ou outra tecnologia`);
+          logger.warn(`[Kalodata]   4. A versão gratuita tem limitações que bloqueiam o acesso`);
+        }
       }
     }
     
