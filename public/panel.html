@@ -796,16 +796,67 @@
                 const limit = document.getElementById('filterLimit').value || '20';
                 
                 const url = `/shop/top-products?source=${source}&limit=${limit}`;
-                const response = await fetch(url);
+                
+                // Log de início
+                console.log('[Panel] Iniciando coleta de produtos...', { source, limit, url });
+                
+                // Atualizar progresso visual
+                if (showProgress) {
+                    progressFill.style.width = '10%';
+                    progressPercent.textContent = '10%';
+                    progressMessage.textContent = 'Conectando ao servidor...';
+                    statusText.textContent = '🔄 Conectando ao servidor...';
+                }
+                
+                // Fazer requisição com timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutos
+                
+                // Atualizar progresso durante a requisição
+                const progressInterval = setInterval(() => {
+                    if (showProgress) {
+                        const current = parseInt(progressPercent.textContent) || 10;
+                        if (current < 90) {
+                            const newProgress = Math.min(90, current + 5);
+                            progressFill.style.width = newProgress + '%';
+                            progressPercent.textContent = newProgress + '%';
+                            progressMessage.textContent = `Processando... (${newProgress}%)`;
+                            statusText.textContent = `🔄 Processando coleta... (${newProgress}%)`;
+                        }
+                    }
+                }, 2000); // Atualizar a cada 2 segundos
+                
+                console.log('[Panel] Fazendo requisição para:', url);
+                const startTime = Date.now();
+                
+                const response = await fetch(url, {
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                clearInterval(progressInterval);
+                
+                const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                console.log(`[Panel] Resposta recebida em ${elapsedTime}s. Status:`, response.status);
+                
+                // Atualizar progresso
+                if (showProgress) {
+                    progressFill.style.width = '95%';
+                    progressPercent.textContent = '95%';
+                    progressMessage.textContent = 'Processando resposta...';
+                    statusText.textContent = '🔄 Processando resposta...';
+                }
                 
                 // Verificar se a resposta é JSON
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
                     const text = await response.text();
+                    console.error('[Panel] Resposta não é JSON:', { status: response.status, contentType, text: text.substring(0, 200) });
                     throw new Error(`Resposta não é JSON. Status: ${response.status}. Resposta: ${text.substring(0, 200)}`);
                 }
                 
                 const result = await response.json();
+                console.log('[Panel] Resultado recebido:', { success: result.success, count: result.count, hasData: !!result.data });
 
                 if (!result.success) {
                     throw new Error(result.error || 'Erro ao carregar produtos');
@@ -830,7 +881,7 @@
                 }, 3000);
 
             } catch (error) {
-                console.error('Erro:', error);
+                console.error('[Panel] Erro ao carregar produtos:', error);
                 
                 refreshSpinner.style.display = 'none';
                 
@@ -840,14 +891,30 @@
                     progressEventSource = null;
                 }
                 
+                // Determinar mensagem de erro mais amigável
+                let errorMessage = error.message;
+                if (error.name === 'AbortError') {
+                    errorMessage = 'A requisição demorou muito (timeout). O servidor pode estar processando. Tente novamente.';
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Não foi possível conectar ao servidor. Verifique se o servidor está rodando.';
+                } else if (error.message.includes('JSON')) {
+                    errorMessage = 'Resposta inválida do servidor. Verifique os logs do servidor.';
+                }
+                
                 statusEl.className = 'status error';
-                statusText.textContent = `❌ Erro: ${error.message}`;
+                statusText.textContent = `❌ Erro: ${errorMessage}`;
                 progressContainer.style.display = 'none';
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="8" class="empty-state">
-                            <h3>Erro ao carregar</h3>
-                            <p>${error.message}</p>
+                            <h3>❌ Erro ao carregar produtos</h3>
+                            <p><strong>Detalhes:</strong> ${errorMessage}</p>
+                            <p style="margin-top: 10px; font-size: 12px; color: var(--text-secondary);">
+                                💡 <strong>Dica:</strong> Abra o console do navegador (F12) para ver mais detalhes do erro.
+                            </p>
+                            <button onclick="loadTrends(true)" style="margin-top: 15px; padding: 10px 20px; background: var(--accent-primary); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                🔄 Tentar Novamente
+                            </button>
                         </td>
                     </tr>
                 `;
