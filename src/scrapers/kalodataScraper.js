@@ -1417,13 +1417,20 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
     while (attempts < maxCloudflareAttempts) {
       const pageState = await page.evaluate(() => {
         const bodyText = document.body.innerText || document.body.textContent || '';
+        const title = document.title;
         return {
-          title: document.title,
-          hasCloudflare: document.title.includes('Just a moment') ||
+          title: title,
+          hasCloudflare: title.includes('Just a moment') ||
+                        title.includes('Um momento') ||
+                        title.includes('Please wait') ||
                         bodyText.includes('Verify you are human') ||
+                        bodyText.includes('Confirme que você é humano') ||
                         bodyText.includes('Checking your browser') ||
+                        bodyText.includes('Verificando seu navegador') ||
                         bodyText.includes('Ray ID:') ||
-                        bodyText.includes('Performance & security by Cloudflare'),
+                        bodyText.includes('precisa revisar a segurança da sua conexão') ||
+                        bodyText.includes('Performance & security by Cloudflare') ||
+                        bodyText.includes('Desempenho e segurança do Cloudflare'),
           bodyLength: bodyText.length
         };
       });
@@ -1490,8 +1497,65 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
     
     // Recarregar página após login bem-sucedido para garantir que produtos aparecem
     logger.info(`[Kalodata] ✅ Login confirmado! Recarregando página de produtos...`);
+    
+    // Aguardar um pouco antes de recarregar para garantir que o login foi processado
+    await randomDelay(3000, 5000);
+    
+    // Recarregar a página de produtos
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 120000 });
     await randomDelay(5000, 8000);
+    
+    // Verificar novamente se o Cloudflare está bloqueando APÓS o login
+    logger.info(`[Kalodata] Verificando Cloudflare após login...`);
+    let cloudflareAfterLogin = false;
+    let loginAttempts = 0;
+    const maxLoginCloudflareAttempts = 20; // 20 tentativas = ~2 minutos
+    
+    while (loginAttempts < maxLoginCloudflareAttempts) {
+      const pageStateAfterLogin = await page.evaluate(() => {
+        const bodyText = document.body.innerText || document.body.textContent || '';
+        const title = document.title;
+        return {
+          title: title,
+          hasCloudflare: title.includes('Just a moment') ||
+                        title.includes('Um momento') ||
+                        title.includes('Please wait') ||
+                        bodyText.includes('Verify you are human') ||
+                        bodyText.includes('Confirme que você é humano') ||
+                        bodyText.includes('Checking your browser') ||
+                        bodyText.includes('Verificando seu navegador') ||
+                        bodyText.includes('Ray ID:') ||
+                        bodyText.includes('precisa revisar a segurança da sua conexão') ||
+                        bodyText.includes('Performance & security by Cloudflare') ||
+                        bodyText.includes('Desempenho e segurança do Cloudflare'),
+          bodyLength: bodyText.length
+        };
+      });
+      
+      if (pageStateAfterLogin.hasCloudflare) {
+        cloudflareAfterLogin = true;
+        loginAttempts++;
+        logger.warn(`[Kalodata] ⚠️ Cloudflare detectado após login (tentativa ${loginAttempts}/${maxLoginCloudflareAttempts}). Aguardando...`);
+        await randomDelay(5000, 7000);
+        
+        // A cada 5 tentativas, tentar recarregar
+        if (loginAttempts % 5 === 0) {
+          logger.info(`[Kalodata] Tentando recarregar página após login...`);
+          await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+          await randomDelay(3000, 5000);
+        }
+      } else {
+        cloudflareAfterLogin = false;
+        logger.info(`[Kalodata] ✅ Cloudflare resolvido após login!`);
+        break;
+      }
+    }
+    
+    if (cloudflareAfterLogin) {
+      logger.error(`[Kalodata] ❌ Cloudflare ainda bloqueando após login!`);
+      logger.error(`[Kalodata] ⚠️ Tente usar modo não-headless: KALODATA_HEADLESS=false`);
+      throw new Error('Cloudflare bloqueando após login. Tente usar modo não-headless.');
+    }
     
     // Verificar novamente se está logado após recarregar
     const stillLoggedIn = await isLoggedIn(page);
@@ -1616,7 +1680,11 @@ async function scrapeKalodataTopProducts({ category = null, country = 'BR', limi
           bodyTextLength: bodyText.length,
           tables: document.querySelectorAll('table').length,
           hasCloudflare: bodyText.includes('Verify you are human') || 
-                        bodyText.includes('Just a moment'),
+                        bodyText.includes('Confirme que você é humano') ||
+                        bodyText.includes('Just a moment') ||
+                        bodyText.includes('Um momento') ||
+                        bodyText.includes('Ray ID:') ||
+                        bodyText.includes('precisa revisar a segurança da sua conexão'),
           hasProductKeywords: bodyText.includes('Receita') || 
                              bodyText.includes('R$') || 
                              bodyText.includes('mi') ||
