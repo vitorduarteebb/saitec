@@ -183,6 +183,40 @@
             box-shadow: 0 4px 12px rgba(255, 0, 80, 0.4);
         }
 
+        .tabs {
+            display: flex;
+            gap: 10px;
+            padding: 20px 40px 0;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+        }
+
+        .tab-btn.active {
+            color: var(--accent-primary);
+            border-bottom-color: var(--accent-primary);
+            background: var(--bg-tertiary);
+        }
+
+        .tab-content {
+            padding: 0;
+        }
+
         .status {
             padding: 16px 40px;
             border-radius: 0;
@@ -1021,7 +1055,7 @@
             if (trends.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="8" class="empty-state">
+                        <td colspan="9" class="empty-state">
                             <h3>Nenhuma tendência encontrada</h3>
                             <p>Tente ajustar os filtros ou aguarde alguns segundos para nova coleta</p>
                         </td>
