@@ -18,9 +18,9 @@ let scrapingLock = false; // Lock para evitar requisições simultâneas
  * false = aceita vídeos globais também
  * Pode ser sobrescrita via TIKTOK_STRICT_COUNTRY_FILTER no .env
  */
-// STRICT_COUNTRY_FILTER: false por padrão para não bloquear dados
-// Use TIKTOK_STRICT_COUNTRY_FILTER=true no .env para ativar modo estrito
-const STRICT_COUNTRY_FILTER = process.env.TIKTOK_STRICT_COUNTRY_FILTER === 'true';
+// STRICT_COUNTRY_FILTER: true por padrão para garantir vídeos brasileiros
+// Use TIKTOK_STRICT_COUNTRY_FILTER=false no .env para aceitar vídeos globais
+const STRICT_COUNTRY_FILTER = process.env.TIKTOK_STRICT_COUNTRY_FILTER !== 'false'; // true por padrão
 // MODO GLOBAL: Desabilitar blacklist por padrão para pegar tendências REAIS
 // A blacklist pode ser muito restritiva e bloquear conteúdo legítimo
 const DISABLE_BLACKLIST = process.env.DISABLE_BLACKLIST !== 'false'; // true por padrão
@@ -710,9 +710,21 @@ function applySmartFilters(rawTrends, options = {}) {
     afterLikes: null,
   };
 
-  // 1) País - ACEITAR QUALQUER PAÍS (modo global)
-  // Não filtrar por país - aceitar tendências de qualquer região
-  stats.afterCountry = trends.length;
+  // 1) País - FILTRAR POR PAÍS SOLICITADO
+  if (strictCountry && targetCountry !== 'GLOBAL') {
+    const beforeCountry = trends.length;
+    trends = trends.filter(video => {
+      return isCountryAllowed(video, targetCountry, video.title || '');
+    });
+    stats.afterCountry = trends.length;
+    const discardedByCountry = beforeCountry - trends.length;
+    if (discardedByCountry > 0) {
+      logger.info(`[TikTok CC] [FiltersDebug] Descartados ${discardedByCountry} vídeos por país (solicitado: ${targetCountry})`);
+    }
+  } else {
+    // Modo não-estrito: aceitar qualquer país
+    stats.afterCountry = trends.length;
+  }
 
   // 2) Blacklist
   if (!disableBlacklist) {
@@ -2434,48 +2446,64 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
       const minLikesEnv = parseInt(process.env.MIN_LIKES || '0', 10);
       const minLikesToUse = minLikesEnv > 0 ? minLikesEnv : 1000; // Se não definido, usar 1k como mínimo
       
-      const jsonFiltered = applySmartFilters(trendsFromJSON, {
-        targetCountry: 'GLOBAL', // Aceitar qualquer país
-        strictCountry: false, // NÃO filtrar por país
+      // PRIORIDADE 1: Tentar filtrar por país BR primeiro
+      let jsonFiltered = applySmartFilters(trendsFromJSON, {
+        targetCountry: country || 'BR', // Filtrar por país solicitado
+        strictCountry: STRICT_COUNTRY_FILTER, // Usar configuração global
         minViews: parseInt(process.env.MIN_VIEWS || '0', 10),
-        minLikes: minLikesToUse, // Usar valor ajustado
-        niche: null, // Aceitar qualquer nicho (não focar só em beleza)
+        minLikes: minLikesToUse,
+        niche: null,
         disableBlacklist: DISABLE_BLACKLIST,
-        disableNiche: true, // Desabilitar filtro de nicho
+        disableNiche: true,
       });
-      logger.info(`[TikTok CC] JSON: ${jsonFiltered.length} vídeos válidos após filtros (MIN_LIKES=${minLikesToUse}, apenas blacklist aplicada, qualquer país aceito)`);
+      logger.info(`[TikTok CC] JSON: ${jsonFiltered.length} vídeos BR válidos após filtros (MIN_LIKES=${minLikesToUse}, país=${country})`);
       
-      // Se nenhum vídeo passou no filtro, tentar sem filtro de curtidas
-      if (jsonFiltered.length === 0 && trendsFromJSON.length > 0) {
-        logger.warn(`[TikTok CC] ⚠️ Nenhum vídeo passou no filtro de ${minLikesToUse} curtidas. Tentando sem filtro de curtidas...`);
-        const jsonFilteredNoLikes = applySmartFilters(trendsFromJSON, {
-          targetCountry: 'GLOBAL',
-          strictCountry: false,
-          minViews: 0,
-          minLikes: 0, // SEM filtro de curtidas
+      // FALLBACK: Se não encontrou vídeos BR suficientes, relaxar filtro de país
+      if (jsonFiltered.length < 5 && trendsFromJSON.length > 0) {
+        logger.warn(`[TikTok CC] ⚠️ Apenas ${jsonFiltered.length} vídeos BR encontrados. Relaxando filtro de país para garantir dados...`);
+        const jsonFilteredRelaxed = applySmartFilters(trendsFromJSON, {
+          targetCountry: country || 'BR', // Manter país alvo
+          strictCountry: false, // Relaxar filtro de país
+          minViews: parseInt(process.env.MIN_VIEWS || '0', 10),
+          minLikes: minLikesToUse,
           niche: null,
           disableBlacklist: DISABLE_BLACKLIST,
           disableNiche: true,
         });
-        if (jsonFilteredNoLikes.length > 0) {
-          logger.info(`[TikTok CC] ✅ Encontrados ${jsonFilteredNoLikes.length} vídeos SEM filtro de curtidas. Usando estes vídeos.`);
-          finalTrends = jsonFilteredNoLikes.slice(0, 20);
-          // Continuar para retornar estes vídeos
+        
+        // Se ainda não encontrou, tentar sem filtro de curtidas
+        if (jsonFilteredRelaxed.length === 0 && trendsFromJSON.length > 0) {
+          logger.warn(`[TikTok CC] ⚠️ Nenhum vídeo passou no filtro de ${minLikesToUse} curtidas. Tentando sem filtro de curtidas...`);
+          const jsonFilteredNoLikes = applySmartFilters(trendsFromJSON, {
+            targetCountry: country || 'BR',
+            strictCountry: false, // Relaxar país também
+            minViews: 0,
+            minLikes: 0, // SEM filtro de curtidas
+            niche: null,
+            disableBlacklist: DISABLE_BLACKLIST,
+            disableNiche: true,
+          });
+          if (jsonFilteredNoLikes.length > 0) {
+            logger.info(`[TikTok CC] ✅ Encontrados ${jsonFilteredNoLikes.length} vídeos SEM filtro de curtidas. Usando estes vídeos.`);
+            jsonFiltered = jsonFilteredNoLikes;
+          }
+        } else {
+          jsonFiltered = jsonFilteredRelaxed;
         }
       }
       
       if (jsonFiltered.length > 0 && finalTrends.length === 0) {
-        logger.info(`[TikTok CC] ✅ Usando ${jsonFiltered.length} vídeos do JSON (ordenados por viralidade, qualquer país!)`);
+        logger.info(`[TikTok CC] ✅ Usando ${jsonFiltered.length} vídeos do JSON (ordenados por viralidade, país=${country})`);
         finalTrends = jsonFiltered;
       }
     }
     
     // Se JSON não retornou dados suficientes, usar API interceptada
     if (finalTrends.length < 20 && trendsFromAPI.length > 0) {
-      logger.info(`[TikTok CC] JSON retornou ${finalTrends.length} vídeos (objetivo: 20), tentando API interceptada (qualquer país)...`);
+      logger.info(`[TikTok CC] JSON retornou ${finalTrends.length} vídeos (objetivo: 20), tentando API interceptada (país=${country})...`);
       const apiFiltered = applySmartFilters(trendsFromAPI, {
-        targetCountry: 'GLOBAL',
-        strictCountry: false,
+        targetCountry: country || 'BR', // Filtrar por país solicitado
+        strictCountry: STRICT_COUNTRY_FILTER, // Usar configuração global
         minViews: parseInt(process.env.MIN_VIEWS || '0', 10),
         minLikes: parseInt(process.env.MIN_LIKES || '50000', 10), // Padrão: 50k curtidas
         niche: null,
@@ -2538,8 +2566,8 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
             
             if (newApiVideos.length > 0) {
               const newApiFiltered = applySmartFilters(newApiVideos, {
-                targetCountry: 'GLOBAL',
-                strictCountry: false,
+                targetCountry: country || 'BR', // Filtrar por país solicitado
+                strictCountry: STRICT_COUNTRY_FILTER, // Usar configuração global
                 minViews: parseInt(process.env.MIN_VIEWS || '0', 10),
                 minLikes: parseInt(process.env.MIN_LIKES || '50000', 10),
                 niche: null,
@@ -2576,10 +2604,10 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
     
     // Se ainda não temos 20 vídeos, usar DOM como complemento
     if (finalTrends.length < 20 && trendsFromDOM.length > 0) {
-      logger.info(`[TikTok CC] Temos ${finalTrends.length} vídeos (objetivo: 20), adicionando do DOM...`);
+      logger.info(`[TikTok CC] Temos ${finalTrends.length} vídeos (objetivo: 20), adicionando do DOM (país=${country})...`);
       const domFiltered = applySmartFilters(trendsFromDOM, {
-        targetCountry: 'GLOBAL',
-        strictCountry: false,
+        targetCountry: country || 'BR', // Filtrar por país solicitado
+        strictCountry: STRICT_COUNTRY_FILTER, // Usar configuração global
         minViews: parseInt(process.env.MIN_VIEWS || '0', 10),
         minLikes: parseInt(process.env.MIN_LIKES || '50000', 10), // Padrão: 50k curtidas
         niche: null,
