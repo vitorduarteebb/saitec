@@ -705,18 +705,19 @@
             `;
 
             try {
-                const source = document.getElementById('filterSource').value || 'kalodata';
+                const niche = document.getElementById('filterNiche').value || '';
                 const limit = document.getElementById('filterLimit').value || '20';
+                const country = 'BR';
                 
-                // Endpoint especial que força modo visível
-                const url = `/shop/top-products?source=${source}&limit=${limit}&forceVisible=true`;
+                // Endpoint de tendências
+                const url = `/trends/top20?niche=${niche}&country=${country}&limit=${limit}`;
                 const response = await fetch(url);
                 
                 // Atualizar progresso
                 progressFill.style.width = '30%';
                 progressPercent.textContent = '30%';
-                progressMessage.textContent = 'Aguardando login manual...';
-                statusText.textContent = '⏳ Aguardando login manual no navegador...';
+                progressMessage.textContent = 'Carregando tendências...';
+                statusText.textContent = '⏳ Carregando vídeos virais do TikTok...';
                 
                 // Verificar se a resposta é JSON
                 const contentType = response.headers.get('content-type');
@@ -728,17 +729,17 @@
                 const result = await response.json();
 
                 if (!result.success) {
-                    throw new Error(result.error || 'Erro ao carregar produtos');
+                    throw new Error(result.error || 'Erro ao carregar tendências');
                 }
 
                 allTrends = result.data || [];
-                displayProducts(allTrends);
+                displayTrends(allTrends);
 
                 progressFill.style.width = '100%';
                 progressPercent.textContent = '100%';
                 progressMessage.textContent = 'Coleta concluída!';
                 statusEl.className = 'status success';
-                statusText.textContent = `✅ ${allTrends.length} produtos carregados com sucesso`;
+                statusText.textContent = `✅ ${allTrends.length} tendências carregadas com sucesso`;
                 
                 setTimeout(() => {
                     progressContainer.style.display = 'none';
@@ -863,7 +864,7 @@
                 }
 
                 allTrends = result.data || [];
-                displayProducts(allTrends);
+                displayTrends(allTrends);
 
                 // Fechar conexão SSE se estiver aberta
                 if (progressEventSource) {
