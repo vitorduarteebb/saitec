@@ -139,6 +139,8 @@ function formatUptime(seconds) {
 
 // Armazenar progresso de coleta ativa (em memória - simples)
 let activeCollectionProgress = null;
+let isCollectionInProgress = false;
+let activeCollectionPromise = null; // Promise da coleta em andamento
 
 /**
  * GET /trends/collect/progress
@@ -303,6 +305,19 @@ app.post('/trends/collect', apiLimiter, async (req, res) => {
  */
 app.post('/trends/top20', apiLimiter, async (req, res) => {
   try {
+    // Verificar se já há uma coleta em andamento
+    if (isCollectionInProgress && activeCollectionProgress) {
+      logger.info('[API] Coleta já em andamento, retornando status de progresso');
+      return res.json({
+        success: true,
+        inProgress: true,
+        progress: activeCollectionProgress.progress || 0,
+        message: activeCollectionProgress.message || 'Coleta em andamento...',
+        status: activeCollectionProgress.status || 'collecting',
+        redirectToProgress: true
+      });
+    }
+
     const {
       niche = process.env.DEFAULT_NICHE || null,
       country = process.env.DEFAULT_COUNTRY || 'BR',
@@ -317,10 +332,23 @@ app.post('/trends/top20', apiLimiter, async (req, res) => {
       });
     }
 
+    // Marcar que há coleta em andamento
+    isCollectionInProgress = true;
+    
+    // Inicializar progresso
+    activeCollectionProgress = {
+      status: 'collecting',
+      progress: 0,
+      message: 'Iniciando coleta...',
+      step: 'iniciando',
+      startTime: new Date().toISOString()
+    };
+
     logger.info(`[API] Buscando Top ${limit} tendências - Nicho: ${niche || 'qualquer'}, País: ${country}`);
     logger.info(`[API] Filtros avançados:`, filters);
 
-    const trends = await getTopTrends({
+    // Criar promise da coleta para compartilhar entre múltiplas requisições
+    const collectionPromise = getTopTrends({
       niche,
       country,
       limit: parseInt(limit),
@@ -329,8 +357,20 @@ app.post('/trends/top20', apiLimiter, async (req, res) => {
       filters: {
         ...filters,
         minLikes: filters.minLikes || parseInt(process.env.MIN_LIKES || '50000', 10)
+      },
+      onProgress: (progress, message, step) => {
+        // Atualizar progresso compartilhado
+        activeCollectionProgress = {
+          ...activeCollectionProgress,
+          progress: Math.min(100, Math.max(0, progress)),
+          message: message || activeCollectionProgress.message,
+          step: step || activeCollectionProgress.step
+        };
       }
     });
+
+    activeCollectionPromise = collectionPromise;
+    const trends = await collectionPromise;
 
     // Formato enxuto para o front-end
     const formattedTrends = trends.map((trend, index) => ({
@@ -352,6 +392,15 @@ app.post('/trends/top20', apiLimiter, async (req, res) => {
       language: trend.language,
       collectedAt: trend.collectedAt
     }));
+
+    // Finalizar progresso
+    activeCollectionProgress = {
+      status: 'completed',
+      progress: 100,
+      message: `Coleta concluída! ${trends.length} tendências encontradas`,
+      step: 'concluido',
+      trendsCount: trends.length
+    };
 
     // Salvar tendências no banco de dados automaticamente
     try {
@@ -380,6 +429,13 @@ app.post('/trends/top20', apiLimiter, async (req, res) => {
       logger.error('[API] Erro ao salvar tendências no banco:', saveError);
     }
 
+    // Liberar lock após 2 segundos
+    setTimeout(() => {
+      isCollectionInProgress = false;
+      activeCollectionPromise = null;
+      activeCollectionProgress = null;
+    }, 2000);
+
     res.json({
       success: true,
       count: formattedTrends.length,
@@ -388,11 +444,24 @@ app.post('/trends/top20', apiLimiter, async (req, res) => {
     });
   } catch (error) {
     logger.error('[API] Erro ao buscar Top 20:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erro ao buscar Top 20 tendências',
-      message: error.message
-    });
+    
+    // Liberar lock em caso de erro
+    isCollectionInProgress = false;
+    activeCollectionPromise = null;
+    activeCollectionProgress = {
+      status: 'error',
+      progress: 0,
+      message: `Erro: ${error.message}`,
+      step: 'erro'
+    };
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: 'Erro ao buscar Top 20 tendências',
+        message: error.message
+      });
+    }
   }
 });
 
@@ -403,6 +472,19 @@ app.post('/trends/top20', apiLimiter, async (req, res) => {
  */
 app.get('/trends/top20', apiLimiter, async (req, res) => {
   try {
+    // Verificar se já há uma coleta em andamento
+    if (isCollectionInProgress && activeCollectionProgress) {
+      logger.info('[API] Coleta já em andamento, retornando status de progresso');
+      return res.json({
+        success: true,
+        inProgress: true,
+        progress: activeCollectionProgress.progress || 0,
+        message: activeCollectionProgress.message || 'Coleta em andamento...',
+        status: activeCollectionProgress.status || 'collecting',
+        redirectToProgress: true
+      });
+    }
+
     // Validar parâmetros básicos
     const limit = parseInt(req.query.limit) || 20;
     if (limit > 100) {
@@ -420,6 +502,18 @@ app.get('/trends/top20', apiLimiter, async (req, res) => {
       language
     } = req.query;
 
+    // Marcar que há coleta em andamento
+    isCollectionInProgress = true;
+    
+    // Inicializar progresso
+    activeCollectionProgress = {
+      status: 'collecting',
+      progress: 0,
+      message: 'Iniciando coleta...',
+      step: 'iniciando',
+      startTime: new Date().toISOString()
+    };
+
     const sourcesArray = sources.split(',').map(s => s.trim()).filter(s => s);
     const hashtagsArray = hashtags 
       ? hashtags.split(',').map(h => h.trim()).filter(h => h)
@@ -434,14 +528,27 @@ app.get('/trends/top20', apiLimiter, async (req, res) => {
     logger.info(`[API] Buscando Top 20 tendências - Nicho: ${niche || 'qualquer'}, País: ${country}`);
     logger.info(`[API] Filtros: MIN_LIKES=${filters.minLikes}, MIN_VIEWS=${filters.minViews || 0}`);
 
-    const trends = await getTopTrends({
+    // Criar promise da coleta para compartilhar entre múltiplas requisições
+    const collectionPromise = getTopTrends({
       niche,
       country,
       limit: 20, // Sempre Top 20
       sources: sourcesArray,
       hashtags: hashtagsArray,
-      filters
+      filters,
+      onProgress: (progress, message, step) => {
+        // Atualizar progresso compartilhado
+        activeCollectionProgress = {
+          ...activeCollectionProgress,
+          progress: Math.min(100, Math.max(0, progress)),
+          message: message || activeCollectionProgress.message,
+          step: step || activeCollectionProgress.step
+        };
+      }
     });
+
+    activeCollectionPromise = collectionPromise;
+    const trends = await collectionPromise;
 
     // Formato enxuto para o front-end
     const formattedTrends = trends.map((trend, index) => ({
@@ -492,6 +599,22 @@ app.get('/trends/top20', apiLimiter, async (req, res) => {
       // Não falhar a requisição se o salvamento der erro
     }
 
+    // Finalizar progresso
+    activeCollectionProgress = {
+      status: 'completed',
+      progress: 100,
+      message: `Coleta concluída! ${trends.length} tendências encontradas`,
+      step: 'concluido',
+      trendsCount: trends.length
+    };
+
+    // Liberar lock após 2 segundos
+    setTimeout(() => {
+      isCollectionInProgress = false;
+      activeCollectionPromise = null;
+      activeCollectionProgress = null;
+    }, 2000);
+
     res.json({
       success: true,
       count: formattedTrends.length,
@@ -501,16 +624,28 @@ app.get('/trends/top20', apiLimiter, async (req, res) => {
   } catch (error) {
     logger.error('[API] Erro ao buscar Top 20:', error);
     
+    // Liberar lock em caso de erro
+    isCollectionInProgress = false;
+    activeCollectionPromise = null;
+    activeCollectionProgress = {
+      status: 'error',
+      progress: 0,
+      message: `Erro: ${error.message}`,
+      step: 'erro'
+    };
+    
     // Não expor detalhes do erro em produção
     const errorMessage = process.env.NODE_ENV === 'production' 
       ? 'Erro ao buscar Top 20 tendências' 
       : error.message;
     
-    res.status(500).json({
-      success: false,
-      error: 'Erro ao buscar Top 20 tendências',
-      message: errorMessage
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: 'Erro ao buscar Top 20 tendências',
+        message: errorMessage
+      });
+    }
   }
 });
 

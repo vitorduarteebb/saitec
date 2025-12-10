@@ -990,6 +990,55 @@
                     response = await fetch(url);
                 }
                 
+                // Verificar se há coleta em andamento
+                const result = await response.json();
+                
+                if (result.inProgress && result.redirectToProgress) {
+                    // Há uma coleta em andamento, conectar ao SSE para mostrar progresso
+                    console.log('[Panel] Coleta já em andamento, conectando ao progresso...');
+                    statusText.textContent = `🔄 ${result.message || 'Coleta em andamento...'}`;
+                    
+                    if (showProgress) {
+                        progressContainer.style.display = 'block';
+                        progressFill.style.width = `${result.progress || 0}%`;
+                        progressPercent.textContent = `${result.progress || 0}%`;
+                        progressMessage.textContent = result.message || 'Aguardando...';
+                    }
+                    
+                    // Conectar ao SSE para atualizações em tempo real
+                    connectToProgress();
+                    
+                    // Aguardar a coleta terminar e buscar resultados
+                    await waitForCollectionComplete();
+                    
+                    // Buscar resultados após coleta completar
+                    const finalResponse = await fetch(url);
+                    const finalResult = await finalResponse.json();
+                    
+                    if (finalResult.success) {
+                        allTrends = finalResult.data || [];
+                        displayTrends(allTrends);
+                        
+                        refreshSpinner.style.display = 'none';
+                        statusEl.className = 'status success';
+                        statusText.textContent = `✅ ${allTrends.length} tendências carregadas com sucesso`;
+                        progressContainer.style.display = 'none';
+                        
+                        setTimeout(() => {
+                            statusEl.style.display = 'none';
+                        }, 3000);
+                    } else {
+                        throw new Error(finalResult.error || 'Erro ao carregar tendências');
+                    }
+                    
+                    return; // Sair da função aqui
+                }
+                
+                // Se não há coleta em andamento, continuar normalmente
+                if (!result.success) {
+                    throw new Error(result.error || 'Erro ao carregar tendências');
+                }
+                
                 // Atualizar progresso
                 progressFill.style.width = '30%';
                 progressPercent.textContent = '30%';
@@ -1133,15 +1182,11 @@
                     throw new Error(`Resposta não é JSON. Status: ${response.status}. Resposta: ${text.substring(0, 200)}`);
                 }
                 
-                const result = await response.json();
-                console.log('[Panel] Resultado recebido:', { success: result.success, count: result.count, hasData: !!result.data });
-
-                if (!result.success) {
-                    throw new Error(result.error || 'Erro ao carregar produtos');
+                // Resultado já foi parseado acima se houver coleta em andamento
+                if (!result.inProgress) {
+                    allTrends = result.data || [];
+                    displayTrends(allTrends);
                 }
-
-                allTrends = result.data || [];
-                displayTrends(allTrends);
 
                 // Fechar conexão SSE se estiver aberta
                 if (progressEventSource) {
