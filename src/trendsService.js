@@ -220,6 +220,171 @@ async function getTrendsFromHashtags({ hashtags = ['#beleza'], country = 'BR' })
 }
 
 /**
+ * Calcula taxa de engajamento (ER)
+ * @param {Object} trend - Tendência
+ * @returns {number} Taxa de engajamento em porcentagem
+ */
+function calculateEngagementRate(trend) {
+  const views = trend.views || trend.metrics?.views || 0;
+  const likes = trend.likes || trend.metrics?.likes || 0;
+  const comments = trend.comments || trend.metrics?.comments || 0;
+  const shares = trend.shares || trend.metrics?.shares || 0;
+  
+  if (views === 0) return 0;
+  
+  const engagement = likes + comments + shares;
+  return (engagement / views) * 100;
+}
+
+/**
+ * Verifica se o vídeo contém palavras-chave
+ * @param {Object} trend - Tendência
+ * @param {Array} keywords - Lista de palavras-chave
+ * @returns {boolean}
+ */
+function containsKeywords(trend, keywords) {
+  if (!keywords || keywords.length === 0) return true;
+  
+  const text = `${trend.title || ''} ${trend.description || ''} ${trend.mainHashtag || ''}`.toLowerCase();
+  
+  return keywords.some(keyword => text.includes(keyword.toLowerCase()));
+}
+
+/**
+ * Verifica se o vídeo contém hashtags obrigatórias
+ * @param {Object} trend - Tendência
+ * @param {Array} requiredHashtags - Lista de hashtags obrigatórias
+ * @returns {boolean}
+ */
+function containsRequiredHashtags(trend, requiredHashtags) {
+  if (!requiredHashtags || requiredHashtags.length === 0) return true;
+  
+  const hashtags = `${trend.mainHashtag || ''} ${trend.title || ''}`.toLowerCase();
+  
+  return requiredHashtags.some(tag => {
+    const tagLower = tag.toLowerCase().replace(/^#/, '');
+    return hashtags.includes(tagLower);
+  });
+}
+
+/**
+ * Verifica se o criador está na lista de exclusão
+ * @param {Object} trend - Tendência
+ * @param {Array} excludeCreators - Lista de criadores a excluir
+ * @returns {boolean}
+ */
+function isCreatorExcluded(trend, excludeCreators) {
+  if (!excludeCreators || excludeCreators.length === 0) return false;
+  
+  const author = (trend.authorHandle || trend.author || '').toLowerCase().replace(/^@/, '');
+  
+  return excludeCreators.some(creator => {
+    const creatorLower = creator.toLowerCase().replace(/^@/, '');
+    return author === creatorLower || author.includes(creatorLower);
+  });
+}
+
+/**
+ * Verifica se o idioma do vídeo corresponde ao filtro
+ * @param {Object} trend - Tendência
+ * @param {string|Array} languageFilter - Idioma(s) permitido(s)
+ * @returns {boolean}
+ */
+function matchesLanguage(trend, languageFilter) {
+  if (!languageFilter) return true;
+  
+  const videoLanguage = (trend.language || '').toLowerCase();
+  const allowedLanguages = Array.isArray(languageFilter) 
+    ? languageFilter.map(l => l.toLowerCase())
+    : [languageFilter.toLowerCase()];
+  
+  return allowedLanguages.some(lang => videoLanguage.includes(lang));
+}
+
+/**
+ * Aplica filtros avançados nas tendências coletadas
+ * @param {Array} trends - Lista de tendências
+ * @param {Object} filters - Objetos de filtro avançados
+ * @returns {Array} Tendências filtradas
+ */
+function applyAdvancedFilters(trends, filters = {}) {
+  let filtered = [...trends];
+  const originalCount = filtered.length;
+  
+  // 1. Filtro de idioma
+  if (filters.language) {
+    filtered = filtered.filter(trend => matchesLanguage(trend, filters.language));
+    logger.info(`[applyAdvancedFilters] Após filtro de idioma (${filters.language}): ${filtered.length} tendências`);
+  }
+  
+  // 2. Filtro de views mínimas
+  if (filters.minViews && filters.minViews > 0) {
+    filtered = filtered.filter(trend => {
+      const views = trend.views || trend.metrics?.views || 0;
+      return views >= filters.minViews;
+    });
+    logger.info(`[applyAdvancedFilters] Após filtro de views (>=${filters.minViews}): ${filtered.length} tendências`);
+  }
+  
+  // 3. Filtro de curtidas mínimas
+  if (filters.minLikes && filters.minLikes > 0) {
+    filtered = filtered.filter(trend => {
+      const likes = trend.likes || trend.metrics?.likes || 0;
+      return likes >= filters.minLikes;
+    });
+    logger.info(`[applyAdvancedFilters] Após filtro de curtidas (>=${filters.minLikes}): ${filtered.length} tendências`);
+  }
+  
+  // 4. Filtro de taxa de engajamento mínima
+  if (filters.minER && filters.minER > 0) {
+    filtered = filtered.filter(trend => {
+      const er = calculateEngagementRate(trend);
+      return er >= filters.minER;
+    });
+    logger.info(`[applyAdvancedFilters] Após filtro de ER (>=${filters.minER}%): ${filtered.length} tendências`);
+  }
+  
+  // 5. Filtro de idade máxima do vídeo (horas)
+  if (filters.maxAgeHours && filters.maxAgeHours > 0) {
+    const maxAge = filters.maxAgeHours * 60 * 60 * 1000; // Converter para ms
+    const now = Date.now();
+    
+    filtered = filtered.filter(trend => {
+      const collectedAt = trend.collectedAt ? new Date(trend.collectedAt).getTime() : now;
+      const age = now - collectedAt;
+      return age <= maxAge;
+    });
+    logger.info(`[applyAdvancedFilters] Após filtro de idade (<=${filters.maxAgeHours}h): ${filtered.length} tendências`);
+  }
+  
+  // 6. Filtro de palavras-chave/tema
+  if (filters.keywords && filters.keywords.length > 0) {
+    filtered = filtered.filter(trend => containsKeywords(trend, filters.keywords));
+    logger.info(`[applyAdvancedFilters] Após filtro de keywords: ${filtered.length} tendências`);
+  }
+  
+  // 7. Filtro de hashtags obrigatórias
+  if (filters.requiredHashtags && filters.requiredHashtags.length > 0) {
+    filtered = filtered.filter(trend => containsRequiredHashtags(trend, filters.requiredHashtags));
+    logger.info(`[applyAdvancedFilters] Após filtro de hashtags obrigatórias: ${filtered.length} tendências`);
+  }
+  
+  // 8. Filtro de criadores excluídos
+  if (filters.excludeCreators && filters.excludeCreators.length > 0) {
+    filtered = filtered.filter(trend => !isCreatorExcluded(trend, filters.excludeCreators));
+    logger.info(`[applyAdvancedFilters] Após excluir criadores: ${filtered.length} tendências`);
+  }
+  
+  // 9. Filtro de range de seguidores (se disponível)
+  // Nota: Este filtro requer dados de seguidores que podem não estar disponíveis
+  // Por enquanto, apenas logamos se o filtro foi aplicado
+  
+  logger.info(`[applyAdvancedFilters] Total: ${originalCount} → ${filtered.length} tendências após filtros avançados`);
+  
+  return filtered;
+}
+
+/**
  * Aplica filtros nas tendências coletadas
  * @param {Array} trends - Lista de tendências
  * @param {Object} filters - Objetos de filtro
@@ -346,12 +511,12 @@ function applyFilters(trends, filters = {}) {
     });
   }
 
-  // Filtro por idioma
+  // Filtro por idioma (mantido para compatibilidade)
   if (filters.language) {
     filtered = filtered.filter(item => item.language === filters.language);
   }
 
-  // Filtro por autor (blacklist de handles)
+  // Filtro por autor (blacklist de handles) - mantido para compatibilidade
   if (filters.excludedAuthors && filters.excludedAuthors.length > 0) {
     filtered = filtered.filter(item => {
       if (!item.authorHandle) return true;
@@ -359,6 +524,17 @@ function applyFilters(trends, filters = {}) {
         item.authorHandle.toLowerCase().includes(author.toLowerCase())
       );
     });
+  }
+
+  // APLICAR FILTROS AVANÇADOS se houver
+  // Verificar se há filtros avançados (além dos básicos)
+  const hasAdvancedFilters = filters.minER || filters.maxAgeHours || filters.keywords || 
+                              filters.requiredHashtags || filters.excludeCreators || 
+                              filters.minFollowers || filters.maxFollowers || filters.growthRate;
+  
+  if (hasAdvancedFilters) {
+    logger.info('[applyFilters] Aplicando filtros avançados...');
+    filtered = applyAdvancedFilters(filtered, filters);
   }
 
   // Retornar TOP 20 (ou todos se tiver menos)

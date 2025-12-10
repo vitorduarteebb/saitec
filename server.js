@@ -298,6 +298,105 @@ app.post('/trends/collect', apiLimiter, async (req, res) => {
 });
 
 /**
+ * POST /trends/top20
+ * Endpoint para coletar tendências com filtros avançados (POST para suportar filtros complexos)
+ */
+app.post('/trends/top20', apiLimiter, async (req, res) => {
+  try {
+    const {
+      niche = process.env.DEFAULT_NICHE || null,
+      country = process.env.DEFAULT_COUNTRY || 'BR',
+      limit = 20,
+      filters = {}
+    } = req.body;
+
+    if (limit > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Limite máximo é 100'
+      });
+    }
+
+    logger.info(`[API] Buscando Top ${limit} tendências - Nicho: ${niche || 'qualquer'}, País: ${country}`);
+    logger.info(`[API] Filtros avançados:`, filters);
+
+    const trends = await getTopTrends({
+      niche,
+      country,
+      limit: parseInt(limit),
+      sources: ['tiktok_cc'],
+      hashtags: [],
+      filters: {
+        ...filters,
+        minLikes: filters.minLikes || parseInt(process.env.MIN_LIKES || '50000', 10)
+      }
+    });
+
+    // Formato enxuto para o front-end
+    const formattedTrends = trends.map((trend, index) => ({
+      id: index + 1,
+      title: trend.title,
+      mainHashtag: trend.mainHashtag || null,
+      origin: trend.source,
+      metrics: {
+        views: trend.views,
+        likes: trend.likes,
+        comments: trend.comments,
+        shares: trend.shares || 0
+      },
+      score: trend.score,
+      engagementScore: trend.engagementScore,
+      url: trend.videoUrl && trend.videoUrl !== 'https://www.tiktok.com' ? trend.videoUrl : null,
+      thumbnail: trend.thumbUrl,
+      author: trend.authorHandle,
+      language: trend.language,
+      collectedAt: trend.collectedAt
+    }));
+
+    // Salvar tendências no banco de dados automaticamente
+    try {
+      const trendsToSave = trends.map(trend => ({
+        source: trend.source,
+        niche: niche || null,
+        title: trend.title,
+        description: trend.description || null,
+        videoUrl: trend.videoUrl,
+        thumbUrl: trend.thumbUrl || null,
+        soundName: trend.soundName || null,
+        authorHandle: trend.authorHandle || null,
+        views: trend.views || 0,
+        likes: trend.likes || 0,
+        comments: trend.comments || 0,
+        shares: trend.shares || 0,
+        engagementScore: trend.engagementScore || trend.score || 0,
+        country: country,
+        language: trend.language || null,
+        collectedAt: trend.collectedAt || new Date()
+      }));
+      
+      const saveResult = await insertTrends(trendsToSave);
+      logger.info(`[API] Tendências salvas no banco: ${saveResult.inserted} inseridas, ${saveResult.skipped} duplicadas`);
+    } catch (saveError) {
+      logger.error('[API] Erro ao salvar tendências no banco:', saveError);
+    }
+
+    res.json({
+      success: true,
+      count: formattedTrends.length,
+      data: formattedTrends,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('[API] Erro ao buscar Top 20:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar Top 20 tendências',
+      message: error.message
+    });
+  }
+});
+
+/**
  * GET /trends/top20
  * Endpoint otimizado para retornar Top 20 tendências ranqueadas
  * Formato enxuto pronto para consumo do front-end

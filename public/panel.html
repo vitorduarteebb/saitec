@@ -217,6 +217,36 @@
             padding: 0;
         }
 
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filter-group label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .filter-group input,
+        .filter-group select {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .filter-group input:focus,
+        .filter-group select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(37, 244, 238, 0.1);
+        }
+
         .status {
             padding: 16px 40px;
             border-radius: 0;
@@ -617,6 +647,103 @@
                     🔄 Atualizar
                 </button>
                 <a href="#" id="downloadCSV" class="btn btn-download" download>📥 Baixar CSV</a>
+                <button class="btn" onclick="toggleAdvancedFilters()" style="background: var(--bg-tertiary); color: var(--text-primary);">
+                    ⚙️ Filtros Avançados
+                </button>
+            </div>
+
+            <!-- Painel de Filtros Avançados (inicialmente oculto) -->
+            <div id="advancedFiltersPanel" style="display: none; padding: 20px 40px; background: var(--bg-tertiary); border-top: 1px solid var(--border-color);">
+                <h3 style="margin-bottom: 20px; color: var(--accent-primary);">⚙️ Filtros Avançados</h3>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                    <!-- Filtro de País -->
+                    <div class="filter-group">
+                        <label for="filterCountry">🌍 País:</label>
+                        <select id="filterCountry">
+                            <option value="BR" selected>Brasil</option>
+                            <option value="US">Estados Unidos</option>
+                            <option value="ES">Espanha</option>
+                            <option value="MX">México</option>
+                        </select>
+                    </div>
+
+                    <!-- Filtro de Idioma -->
+                    <div class="filter-group">
+                        <label for="filterLanguage">🗣️ Idioma:</label>
+                        <select id="filterLanguage">
+                            <option value="" selected>Qualquer</option>
+                            <option value="pt">Português</option>
+                            <option value="pt-BR">Português (BR)</option>
+                            <option value="en">Inglês</option>
+                            <option value="es">Espanhol</option>
+                        </select>
+                    </div>
+
+                    <!-- Filtro de Views Mínimas -->
+                    <div class="filter-group">
+                        <label for="filterMinViews">👁️ Views Mínimas:</label>
+                        <input type="number" id="filterMinViews" placeholder="5000" min="0" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
+                    </div>
+
+                    <!-- Filtro de Curtidas Mínimas -->
+                    <div class="filter-group">
+                        <label for="filterMinLikes">❤️ Curtidas Mínimas:</label>
+                        <input type="number" id="filterMinLikes" placeholder="200" min="0" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
+                    </div>
+
+                    <!-- Filtro de Taxa de Engajamento Mínima -->
+                    <div class="filter-group">
+                        <label for="filterMinER">📊 Taxa de Engajamento Mínima (%):</label>
+                        <input type="number" id="filterMinER" placeholder="3" min="0" max="100" step="0.1" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
+                    </div>
+
+                    <!-- Filtro de Idade Máxima do Vídeo (horas) -->
+                    <div class="filter-group">
+                        <label for="filterMaxAge">⏰ Idade Máxima (horas):</label>
+                        <input type="number" id="filterMaxAge" placeholder="72" min="1" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
+                    </div>
+
+                    <!-- Filtro de Taxa de Crescimento -->
+                    <div class="filter-group">
+                        <label for="filterGrowthRate">📈 Taxa de Crescimento 24h (%):</label>
+                        <input type="number" id="filterGrowthRate" placeholder="15" min="0" step="0.1" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
+                    </div>
+
+                    <!-- Filtro de Keywords/Tema -->
+                    <div class="filter-group" style="grid-column: 1 / -1;">
+                        <label for="filterKeywords">🔑 Palavras-chave do Tema (separadas por vírgula):</label>
+                        <input type="text" id="filterKeywords" placeholder="saúde, emagrecimento, beleza, motivação" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
+                    </div>
+
+                    <!-- Filtro de Hashtags Obrigatórias -->
+                    <div class="filter-group" style="grid-column: 1 / -1;">
+                        <label for="filterRequiredHashtags">🏷️ Hashtags Obrigatórias (separadas por vírgula):</label>
+                        <input type="text" id="filterRequiredHashtags" placeholder="#tiktokmadelmebuy, #tiktokshopbr, #review" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
+                    </div>
+
+                    <!-- Filtro de Criadores Excluídos -->
+                    <div class="filter-group" style="grid-column: 1 / -1;">
+                        <label for="filterExcludeCreators">🚫 Criadores Excluídos (separados por vírgula, sem @):</label>
+                        <input type="text" id="filterExcludeCreators" placeholder="kondzilla, liveshop, revendedoroficial" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
+                    </div>
+
+                    <!-- Filtro de Range de Seguidores -->
+                    <div class="filter-group">
+                        <label for="filterMinFollowers">👥 Seguidores Mínimos:</label>
+                        <input type="number" id="filterMinFollowers" placeholder="2000" min="0" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="filterMaxFollowers">👥 Seguidores Máximos:</label>
+                        <input type="number" id="filterMaxFollowers" placeholder="300000" min="0" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="resetAdvancedFilters()">🔄 Resetar Filtros</button>
+                    <button class="btn" onclick="toggleAdvancedFilters()" style="background: var(--bg-secondary); color: var(--text-primary);">Fechar</button>
+                </div>
             </div>
         </div>
 
@@ -778,11 +905,90 @@
             try {
                 const niche = document.getElementById('filterNiche').value || '';
                 const limit = document.getElementById('filterLimit').value || '20';
-                const country = 'BR';
+                const country = document.getElementById('filterCountry')?.value || 'BR';
                 
-                // Endpoint de tendências
-                const url = `/trends/top20?niche=${niche}&country=${country}&limit=${limit}`;
-                const response = await fetch(url);
+                // Coletar filtros avançados
+                const filters = {};
+                
+                // Filtros básicos
+                if (niche) filters.niche = niche;
+                if (country) filters.country = country;
+                
+                // Filtros de idioma
+                const language = document.getElementById('filterLanguage')?.value;
+                if (language) filters.language = language;
+                
+                // Filtros de métricas
+                const minViews = document.getElementById('filterMinViews')?.value;
+                if (minViews) filters.minViews = parseInt(minViews);
+                
+                const minLikes = document.getElementById('filterMinLikes')?.value;
+                if (minLikes) filters.minLikes = parseInt(minLikes);
+                
+                const minER = document.getElementById('filterMinER')?.value;
+                if (minER) filters.minER = parseFloat(minER);
+                
+                const maxAge = document.getElementById('filterMaxAge')?.value;
+                if (maxAge) filters.maxAgeHours = parseInt(maxAge);
+                
+                const growthRate = document.getElementById('filterGrowthRate')?.value;
+                if (growthRate) filters.growthRate = parseFloat(growthRate);
+                
+                // Filtros de conteúdo
+                const keywords = document.getElementById('filterKeywords')?.value;
+                if (keywords) {
+                    filters.keywords = keywords.split(',').map(k => k.trim()).filter(k => k);
+                }
+                
+                const requiredHashtags = document.getElementById('filterRequiredHashtags')?.value;
+                if (requiredHashtags) {
+                    filters.requiredHashtags = requiredHashtags.split(',').map(h => h.trim().replace(/^#/, '')).filter(h => h);
+                }
+                
+                const excludeCreators = document.getElementById('filterExcludeCreators')?.value;
+                if (excludeCreators) {
+                    filters.excludeCreators = excludeCreators.split(',').map(c => c.trim().replace(/^@/, '')).filter(c => c);
+                }
+                
+                // Filtros de criadores
+                const minFollowers = document.getElementById('filterMinFollowers')?.value;
+                if (minFollowers) filters.minFollowers = parseInt(minFollowers);
+                
+                const maxFollowers = document.getElementById('filterMaxFollowers')?.value;
+                if (maxFollowers) filters.maxFollowers = parseInt(maxFollowers);
+                
+                // Construir URL com todos os filtros
+                const params = new URLSearchParams();
+                params.append('niche', niche || '');
+                params.append('country', country);
+                params.append('limit', limit);
+                
+                // Adicionar filtros como query params ou JSON no body
+                // Vamos usar POST para filtros complexos
+                const url = `/trends/top20?${params.toString()}`;
+                
+                // Fazer requisição POST com filtros no body se houver filtros avançados
+                const hasAdvancedFilters = Object.keys(filters).length > 3; // Mais que niche, country, limit
+                
+                let response;
+                if (hasAdvancedFilters) {
+                    // Usar POST para filtros avançados
+                    response = await fetch('/trends/top20', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            niche: niche || null,
+                            country: country,
+                            limit: parseInt(limit),
+                            filters: filters
+                        })
+                    });
+                } else {
+                    // Usar GET para filtros simples
+                    response = await fetch(url);
+                }
                 
                 // Atualizar progresso
                 progressFill.style.width = '30%';
@@ -1152,6 +1358,32 @@
         
         // Carregar datas disponíveis para histórico
         loadAvailableDates();
+
+        // Função para mostrar/ocultar filtros avançados
+        function toggleAdvancedFilters() {
+            const panel = document.getElementById('advancedFiltersPanel');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
+        // Função para resetar filtros avançados
+        function resetAdvancedFilters() {
+            document.getElementById('filterCountry').value = 'BR';
+            document.getElementById('filterLanguage').value = '';
+            document.getElementById('filterMinViews').value = '';
+            document.getElementById('filterMinLikes').value = '';
+            document.getElementById('filterMinER').value = '';
+            document.getElementById('filterMaxAge').value = '';
+            document.getElementById('filterGrowthRate').value = '';
+            document.getElementById('filterKeywords').value = '';
+            document.getElementById('filterRequiredHashtags').value = '';
+            document.getElementById('filterExcludeCreators').value = '';
+            document.getElementById('filterMinFollowers').value = '';
+            document.getElementById('filterMaxFollowers').value = '';
+        }
 
         // Função para alternar entre abas
         function showTab(tabName) {
