@@ -1914,17 +1914,10 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
     // Creative Center foi removido completamente - não funciona mais
     const localeCode = country === 'BR' ? 'pt' : (country === 'US' ? 'en' : locale.split('-')[0]);
     
-    // SEMPRE usar For You - login é obrigatório
-    const url = `https://www.tiktok.com/foryou?lang=${localeCode}`;
-    const useForYou = true;
-    
-    logger.info(`[TikTok CC] 🎯 ESTRATÉGIA: Usando APENAS FOR YOU (vídeos virais reais do dia)`);
-    logger.info(`[TikTok CC] ⚠️ Creative Center foi REMOVIDO completamente - não funciona mais`);
+    // BUSCAR ESPECIFICAMENTE POR "TIKTOK SHOP" NO FOR YOU
+    // Primeiro fazer login, depois buscar por "tiktok shop"
+    logger.info(`[TikTok CC] 🎯 ESTRATÉGIA: Buscar "TikTok Shop" no For You`);
     logger.info(`[TikTok CC] 🔐 Login é OBRIGATÓRIO para acessar For You`);
-    logger.info(`[TikTok CC] 📍 URL: ${url}`);
-    logger.info(`[TikTok CC] ⚙️ Configure HEADLESS=false no .env para ver o navegador e fazer login manual`);
-    
-    logger.info(`[TikTok CC] Acessando página For You...`);
     
     const pageTimeout = parseInt(process.env.PAGE_TIMEOUT || 120000);
     
@@ -1934,9 +1927,10 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
     // Tentar carregar cookies primeiro
     await loadCookies(page);
     
-    // Navegar para For You
+    // Navegar para página inicial do TikTok
+    const initialUrl = `https://www.tiktok.com/foryou?lang=${localeCode}`;
     await retry(async () => {
-      await page.goto(url, { 
+      await page.goto(initialUrl, { 
         waitUntil: 'networkidle2', 
         timeout: pageTimeout 
       });
@@ -1949,15 +1943,15 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
     
     if (needsLogin) {
       logger.warn(`[TikTok CC] ⚠️ Login necessário. Iniciando processo de login...`);
-      const loginSuccess = await loginToTikTok(page);
+      const loginSuccess = await loginTikTok(page);
       
       if (!loginSuccess) {
         throw new Error('Login no TikTok falhou. Não é possível acessar For You sem login.');
       }
       
-      // Recarregar For You após login bem-sucedido
-      logger.info(`[TikTok CC] ✅ Login bem-sucedido! Recarregando For You...`);
-      await page.goto(url, { waitUntil: 'networkidle2', timeout: pageTimeout });
+      // Recarregar página após login bem-sucedido
+      logger.info(`[TikTok CC] ✅ Login bem-sucedido! Recarregando página...`);
+      await page.goto(initialUrl, { waitUntil: 'networkidle2', timeout: pageTimeout });
       await randomDelay(3000, 5000);
     } else {
       logger.info(`[TikTok CC] ✅ Já está logado!`);
@@ -2441,75 +2435,79 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
         });
       }
       
-      // Aplicar filtros SEM restrição de país, MAS com filtro de curtidas RELAXADO
-      // Se MIN_LIKES não estiver definido ou for muito alto, usar um valor mais baixo
-      const minLikesEnv = parseInt(process.env.MIN_LIKES || '0', 10);
-      const minLikesToUse = minLikesEnv > 0 ? minLikesEnv : 1000; // Se não definido, usar 1k como mínimo
+      // SIMPLIFICADO: Apenas ordenar por métricas (likes, comentários, visualizações)
+      // Não aplicar filtros complexos - apenas ordenar pelos maiores números
+      logger.info(`[TikTok CC] Ordenando ${trendsFromJSON.length} vídeos por métricas (likes, comentários, visualizações)...`);
       
-      // PRIORIDADE 1: Tentar filtrar por país BR primeiro
-      let jsonFiltered = applySmartFilters(trendsFromJSON, {
-        targetCountry: country || 'BR', // Filtrar por país solicitado
-        strictCountry: STRICT_COUNTRY_FILTER, // Usar configuração global
-        minViews: parseInt(process.env.MIN_VIEWS || '0', 10),
-        minLikes: minLikesToUse,
-        niche: null,
-        disableBlacklist: DISABLE_BLACKLIST,
-        disableNiche: true,
+      // Ordenar por viral score (likes * 2 + views + comments * 3 + shares * 5)
+      const sortedVideos = trendsFromJSON.sort((a, b) => {
+        const scoreA = (a.likes || a.metrics?.likes || 0) * 2 + 
+                       (a.views || a.metrics?.views || 0) + 
+                       (a.comments || a.metrics?.comments || 0) * 3 + 
+                       (a.shares || a.metrics?.shares || 0) * 5;
+        const scoreB = (b.likes || b.metrics?.likes || 0) * 2 + 
+                       (b.views || b.metrics?.views || 0) + 
+                       (b.comments || b.metrics?.comments || 0) * 3 + 
+                       (b.shares || b.metrics?.shares || 0) * 5;
+        return scoreB - scoreA; // Maior primeiro
       });
-      logger.info(`[TikTok CC] JSON: ${jsonFiltered.length} vídeos BR válidos após filtros (MIN_LIKES=${minLikesToUse}, país=${country})`);
       
-      // FALLBACK: Se não encontrou vídeos BR suficientes, relaxar filtro de país
-      if (jsonFiltered.length < 5 && trendsFromJSON.length > 0) {
-        logger.warn(`[TikTok CC] ⚠️ Apenas ${jsonFiltered.length} vídeos BR encontrados. Relaxando filtro de país para garantir dados...`);
-        const jsonFilteredRelaxed = applySmartFilters(trendsFromJSON, {
-          targetCountry: country || 'BR', // Manter país alvo
-          strictCountry: false, // Relaxar filtro de país
-          minViews: parseInt(process.env.MIN_VIEWS || '0', 10),
-          minLikes: minLikesToUse,
-          niche: null,
-          disableBlacklist: DISABLE_BLACKLIST,
-          disableNiche: true,
-        });
-        
-        // Se ainda não encontrou, tentar sem filtro de curtidas
-        if (jsonFilteredRelaxed.length === 0 && trendsFromJSON.length > 0) {
-          logger.warn(`[TikTok CC] ⚠️ Nenhum vídeo passou no filtro de ${minLikesToUse} curtidas. Tentando sem filtro de curtidas...`);
-          const jsonFilteredNoLikes = applySmartFilters(trendsFromJSON, {
-            targetCountry: country || 'BR',
-            strictCountry: false, // Relaxar país também
-            minViews: 0,
-            minLikes: 0, // SEM filtro de curtidas
-            niche: null,
-            disableBlacklist: DISABLE_BLACKLIST,
-            disableNiche: true,
-          });
-          if (jsonFilteredNoLikes.length > 0) {
-            logger.info(`[TikTok CC] ✅ Encontrados ${jsonFilteredNoLikes.length} vídeos SEM filtro de curtidas. Usando estes vídeos.`);
-            jsonFiltered = jsonFilteredNoLikes;
-          }
-        } else {
-          jsonFiltered = jsonFilteredRelaxed;
-        }
+      // Filtrar apenas vídeos relacionados a "tiktok shop"
+      const tiktokShopVideos = sortedVideos.filter(video => {
+        const text = `${video.title || ''} ${video.description || ''} ${video.mainHashtag || ''}`.toLowerCase();
+        return text.includes('tiktok shop') || 
+               text.includes('tiktokshop') || 
+               text.includes('tiktok-shop') ||
+               text.includes('shop') ||
+               (video.hashtags && video.hashtags.some(h => h.toLowerCase().includes('shop')));
+      });
+      
+      logger.info(`[TikTok CC] ✅ Encontrados ${tiktokShopVideos.length} vídeos relacionados a TikTok Shop (de ${trendsFromJSON.length} total)`);
+      
+      // Se não encontrou vídeos específicos de shop, usar todos ordenados por métricas
+      if (tiktokShopVideos.length === 0 && sortedVideos.length > 0) {
+        logger.warn(`[TikTok CC] ⚠️ Nenhum vídeo específico de TikTok Shop encontrado. Usando todos os vídeos ordenados por métricas...`);
+        finalTrends = sortedVideos.slice(0, 20);
+      } else {
+        finalTrends = tiktokShopVideos.slice(0, 20);
       }
       
-      if (jsonFiltered.length > 0 && finalTrends.length === 0) {
-        logger.info(`[TikTok CC] ✅ Usando ${jsonFiltered.length} vídeos do JSON (ordenados por viralidade, país=${country})`);
-        finalTrends = jsonFiltered;
-      }
+      logger.info(`[TikTok CC] ✅ Usando ${finalTrends.length} vídeos ordenados por métricas (maiores likes, comentários, visualizações)`);
     }
     
     // Se JSON não retornou dados suficientes, usar API interceptada
     if (finalTrends.length < 20 && trendsFromAPI.length > 0) {
-      logger.info(`[TikTok CC] JSON retornou ${finalTrends.length} vídeos (objetivo: 20), tentando API interceptada (país=${country})...`);
-      const apiFiltered = applySmartFilters(trendsFromAPI, {
-        targetCountry: country || 'BR', // Filtrar por país solicitado
-        strictCountry: STRICT_COUNTRY_FILTER, // Usar configuração global
-        minViews: parseInt(process.env.MIN_VIEWS || '0', 10),
-        minLikes: parseInt(process.env.MIN_LIKES || '50000', 10), // Padrão: 50k curtidas
-        niche: null,
-        disableBlacklist: DISABLE_BLACKLIST,
-        disableNiche: true,
+      logger.info(`[TikTok CC] JSON retornou ${finalTrends.length} vídeos (objetivo: 20), adicionando da API interceptada...`);
+      
+      // Ordenar API por métricas também
+      const sortedApiVideos = trendsFromAPI.sort((a, b) => {
+        const scoreA = (a.likes || a.metrics?.likes || 0) * 2 + 
+                       (a.views || a.metrics?.views || 0) + 
+                       (a.comments || a.metrics?.comments || 0) * 3 + 
+                       (a.shares || a.metrics?.shares || 0) * 5;
+        const scoreB = (b.likes || b.metrics?.likes || 0) * 2 + 
+                       (b.views || b.metrics?.views || 0) + 
+                       (b.comments || b.metrics?.comments || 0) * 3 + 
+                       (b.shares || b.metrics?.shares || 0) * 5;
+        return scoreB - scoreA;
       });
+      
+      // Filtrar por TikTok Shop
+      const apiShopVideos = sortedApiVideos.filter(video => {
+        const text = `${video.title || ''} ${video.description || ''} ${video.mainHashtag || ''}`.toLowerCase();
+        return text.includes('tiktok shop') || 
+               text.includes('tiktokshop') || 
+               text.includes('shop');
+      });
+      
+      // Adicionar vídeos únicos (não duplicados)
+      const existingUrls = new Set(finalTrends.map(v => v.videoUrl || v.url));
+      const newVideos = (apiShopVideos.length > 0 ? apiShopVideos : sortedApiVideos)
+        .filter(v => !existingUrls.has(v.videoUrl || v.url))
+        .slice(0, 20 - finalTrends.length);
+      
+      finalTrends = [...finalTrends, ...newVideos];
+      logger.info(`[TikTok CC] ✅ Adicionados ${newVideos.length} vídeos da API (total: ${finalTrends.length})`);
       logger.info(`[TikTok CC] API: ${apiFiltered.length} vídeos válidos após filtros`);
       
       if (apiFiltered.length > 0) {
@@ -2565,14 +2563,25 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
             }
             
             if (newApiVideos.length > 0) {
-              const newApiFiltered = applySmartFilters(newApiVideos, {
-                targetCountry: country || 'BR', // Filtrar por país solicitado
-                strictCountry: STRICT_COUNTRY_FILTER, // Usar configuração global
-                minViews: parseInt(process.env.MIN_VIEWS || '0', 10),
-                minLikes: parseInt(process.env.MIN_LIKES || '50000', 10),
-                niche: null,
-                disableBlacklist: DISABLE_BLACKLIST,
-                disableNiche: true,
+              // Ordenar por métricas
+              const sortedNewVideos = newApiVideos.sort((a, b) => {
+                const scoreA = (a.likes || a.metrics?.likes || 0) * 2 + 
+                               (a.views || a.metrics?.views || 0) + 
+                               (a.comments || a.metrics?.comments || 0) * 3 + 
+                               (a.shares || a.metrics?.shares || 0) * 5;
+                const scoreB = (b.likes || b.metrics?.likes || 0) * 2 + 
+                               (b.views || b.metrics?.views || 0) + 
+                               (b.comments || b.metrics?.comments || 0) * 3 + 
+                               (b.shares || b.metrics?.shares || 0) * 5;
+                return scoreB - scoreA;
+              });
+              
+              // Filtrar por TikTok Shop
+              const newApiFiltered = sortedNewVideos.filter(video => {
+                const text = `${video.title || ''} ${video.description || ''} ${video.mainHashtag || ''}`.toLowerCase();
+                return text.includes('tiktok shop') || 
+                       text.includes('tiktokshop') || 
+                       text.includes('shop');
               });
               
               const existingIds2 = new Set(finalTrends.map(t => t.id).filter(Boolean));
@@ -2604,15 +2613,27 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
     
     // Se ainda não temos 20 vídeos, usar DOM como complemento
     if (finalTrends.length < 20 && trendsFromDOM.length > 0) {
-      logger.info(`[TikTok CC] Temos ${finalTrends.length} vídeos (objetivo: 20), adicionando do DOM (país=${country})...`);
-      const domFiltered = applySmartFilters(trendsFromDOM, {
-        targetCountry: country || 'BR', // Filtrar por país solicitado
-        strictCountry: STRICT_COUNTRY_FILTER, // Usar configuração global
-        minViews: parseInt(process.env.MIN_VIEWS || '0', 10),
-        minLikes: parseInt(process.env.MIN_LIKES || '50000', 10), // Padrão: 50k curtidas
-        niche: null,
-        disableBlacklist: DISABLE_BLACKLIST,
-        disableNiche: true,
+      logger.info(`[TikTok CC] Temos ${finalTrends.length} vídeos (objetivo: 20), adicionando do DOM...`);
+      
+      // Ordenar DOM por métricas
+      const sortedDomVideos = trendsFromDOM.sort((a, b) => {
+        const scoreA = (a.likes || a.metrics?.likes || 0) * 2 + 
+                       (a.views || a.metrics?.views || 0) + 
+                       (a.comments || a.metrics?.comments || 0) * 3 + 
+                       (a.shares || a.metrics?.shares || 0) * 5;
+        const scoreB = (b.likes || b.metrics?.likes || 0) * 2 + 
+                       (b.views || b.metrics?.views || 0) + 
+                       (b.comments || b.metrics?.comments || 0) * 3 + 
+                       (b.shares || b.metrics?.shares || 0) * 5;
+        return scoreB - scoreA;
+      });
+      
+      // Filtrar por TikTok Shop
+      const domFiltered = sortedDomVideos.filter(video => {
+        const text = `${video.title || ''} ${video.description || ''} ${video.mainHashtag || ''}`.toLowerCase();
+        return text.includes('tiktok shop') || 
+               text.includes('tiktokshop') || 
+               text.includes('shop');
       });
       logger.info(`[TikTok CC] DOM: ${domFiltered.length} vídeos válidos após filtros`);
       

@@ -623,17 +623,6 @@
         <div id="tabCollectContent" class="tab-content">
             <div class="controls">
                 <div class="control-group">
-                    <label for="filterNiche">Nicho:</label>
-                    <select id="filterNiche">
-                        <option value="" selected>Todos</option>
-                        <option value="beleza">Beleza</option>
-                        <option value="moda">Moda</option>
-                        <option value="fitness">Fitness</option>
-                        <option value="comida">Comida</option>
-                        <option value="tech">Tech</option>
-                    </select>
-                </div>
-                <div class="control-group">
                     <label for="filterLimit">Quantidade:</label>
                     <select id="filterLimit">
                         <option value="20" selected>20 vídeos</option>
@@ -644,106 +633,15 @@
 
                 <button class="btn btn-primary" onclick="loadTrends(true)">
                     <span class="loading-spinner" id="refreshSpinner" style="display: none;"></span>
-                    🔄 Atualizar
+                    🔄 Coletar TikTok Shop
                 </button>
                 <a href="#" id="downloadCSV" class="btn btn-download" download>📥 Baixar CSV</a>
-                <button class="btn" onclick="toggleAdvancedFilters()" style="background: var(--bg-tertiary); color: var(--text-primary);">
-                    ⚙️ Filtros Avançados
-                </button>
             </div>
-
-            <!-- Painel de Filtros Avançados (inicialmente oculto) -->
-            <div id="advancedFiltersPanel" style="display: none; padding: 20px 40px; background: var(--bg-tertiary); border-top: 1px solid var(--border-color);">
-                <h3 style="margin-bottom: 20px; color: var(--accent-primary);">⚙️ Filtros Avançados</h3>
-                
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
-                    <!-- Filtro de País -->
-                    <div class="filter-group">
-                        <label for="filterCountry">🌍 País:</label>
-                        <select id="filterCountry">
-                            <option value="BR" selected>Brasil</option>
-                            <option value="US">Estados Unidos</option>
-                            <option value="ES">Espanha</option>
-                            <option value="MX">México</option>
-                        </select>
-                    </div>
-
-                    <!-- Filtro de Idioma -->
-                    <div class="filter-group">
-                        <label for="filterLanguage">🗣️ Idioma:</label>
-                        <select id="filterLanguage">
-                            <option value="" selected>Qualquer</option>
-                            <option value="pt">Português</option>
-                            <option value="pt-BR">Português (BR)</option>
-                            <option value="en">Inglês</option>
-                            <option value="es">Espanhol</option>
-                        </select>
-                    </div>
-
-                    <!-- Filtro de Views Mínimas -->
-                    <div class="filter-group">
-                        <label for="filterMinViews">👁️ Views Mínimas:</label>
-                        <input type="number" id="filterMinViews" placeholder="5000" min="0" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
-                    </div>
-
-                    <!-- Filtro de Curtidas Mínimas -->
-                    <div class="filter-group">
-                        <label for="filterMinLikes">❤️ Curtidas Mínimas:</label>
-                        <input type="number" id="filterMinLikes" placeholder="200" min="0" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
-                    </div>
-
-                    <!-- Filtro de Taxa de Engajamento Mínima -->
-                    <div class="filter-group">
-                        <label for="filterMinER">📊 Taxa de Engajamento Mínima (%):</label>
-                        <input type="number" id="filterMinER" placeholder="3" min="0" max="100" step="0.1" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
-                    </div>
-
-                    <!-- Filtro de Idade Máxima do Vídeo (horas) -->
-                    <div class="filter-group">
-                        <label for="filterMaxAge">⏰ Idade Máxima (horas):</label>
-                        <input type="number" id="filterMaxAge" placeholder="72" min="1" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
-                    </div>
-
-                    <!-- Filtro de Taxa de Crescimento -->
-                    <div class="filter-group">
-                        <label for="filterGrowthRate">📈 Taxa de Crescimento 24h (%):</label>
-                        <input type="number" id="filterGrowthRate" placeholder="15" min="0" step="0.1" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
-                    </div>
-
-                    <!-- Filtro de Keywords/Tema -->
-                    <div class="filter-group" style="grid-column: 1 / -1;">
-                        <label for="filterKeywords">🔑 Palavras-chave do Tema (separadas por vírgula):</label>
-                        <input type="text" id="filterKeywords" placeholder="saúde, emagrecimento, beleza, motivação" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
-                    </div>
-
-                    <!-- Filtro de Hashtags Obrigatórias -->
-                    <div class="filter-group" style="grid-column: 1 / -1;">
-                        <label for="filterRequiredHashtags">🏷️ Hashtags Obrigatórias (separadas por vírgula):</label>
-                        <input type="text" id="filterRequiredHashtags" placeholder="#tiktokmadelmebuy, #tiktokshopbr, #review" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
-                    </div>
-
-                    <!-- Filtro de Criadores Excluídos -->
-                    <div class="filter-group" style="grid-column: 1 / -1;">
-                        <label for="filterExcludeCreators">🚫 Criadores Excluídos (separados por vírgula, sem @):</label>
-                        <input type="text" id="filterExcludeCreators" placeholder="kondzilla, liveshop, revendedoroficial" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
-                    </div>
-
-                    <!-- Filtro de Range de Seguidores -->
-                    <div class="filter-group">
-                        <label for="filterMinFollowers">👥 Seguidores Mínimos:</label>
-                        <input type="number" id="filterMinFollowers" placeholder="2000" min="0" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
-                    </div>
-
-                    <div class="filter-group">
-                        <label for="filterMaxFollowers">👥 Seguidores Máximos:</label>
-                        <input type="number" id="filterMaxFollowers" placeholder="300000" min="0" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); width: 100%;">
-                    </div>
-                </div>
-
-                <div style="margin-top: 20px; display: flex; gap: 10px;">
-                    <button class="btn btn-primary" onclick="resetAdvancedFilters()">🔄 Resetar Filtros</button>
-                    <button class="btn" onclick="toggleAdvancedFilters()" style="background: var(--bg-secondary); color: var(--text-primary);">Fechar</button>
-                </div>
+            
+            <div style="padding: 20px 40px; background: var(--bg-tertiary); border-top: 1px solid var(--border-color);">
+                <p style="color: var(--text-secondary); font-size: 14px; margin: 0;">
+                    📊 <strong>Coleta Simplificada:</strong> O sistema busca especificamente por "TikTok Shop" no For You e ordena os vídeos por maiores métricas (likes, comentários, visualizações).
+                </p>
             </div>
         </div>
 
@@ -1124,22 +1022,21 @@
             `;
 
             try {
-                // Usar endpoint de tendências/vídeos
-                const niche = document.getElementById('filterNiche').value || '';
+                // Coleta simplificada - apenas quantidade
                 const limit = document.getElementById('filterLimit').value || '20';
-                const country = 'BR'; // País fixo por enquanto
+                const country = 'BR'; // País fixo
                 
-                const url = `/trends/top20?niche=${niche}&country=${country}&limit=${limit}`;
+                const url = `/trends/top20?country=${country}&limit=${limit}`;
                 
                 // Log de início
-                console.log('[Panel] Iniciando coleta de tendências...', { niche, country, limit, url });
+                console.log('[Panel] Iniciando coleta de TikTok Shop...', { country, limit, url });
                 
                 // Atualizar progresso visual
                 if (showProgress) {
                     progressFill.style.width = '10%';
                     progressPercent.textContent = '10%';
-                    progressMessage.textContent = 'Conectando ao servidor...';
-                    statusText.textContent = '🔄 Conectando ao servidor...';
+                    progressMessage.textContent = 'Buscando TikTok Shop no For You...';
+                    statusText.textContent = '🔄 Buscando TikTok Shop no For You...';
                 }
                 
                 // Fazer requisição com timeout aumentado (10 minutos para scraping)
@@ -1154,8 +1051,8 @@
                             const newProgress = Math.min(90, current + 5);
                             progressFill.style.width = newProgress + '%';
                             progressPercent.textContent = newProgress + '%';
-                            progressMessage.textContent = `Processando... (${newProgress}%)`;
-                            statusText.textContent = `🔄 Processando coleta... (${newProgress}%)`;
+                            progressMessage.textContent = `Coletando vídeos... (${newProgress}%)`;
+                            statusText.textContent = `🔄 Coletando vídeos do TikTok Shop... (${newProgress}%)`;
                         }
                     }
                 }, 2000); // Atualizar a cada 2 segundos
@@ -1163,28 +1060,10 @@
                 console.log('[Panel] Fazendo requisição para:', url);
                 const startTime = Date.now();
                 
-                let response;
-                if (hasAdvancedFilters) {
-                    // Usar POST para filtros avançados
-                    response = await fetch('/trends/top20', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            niche: niche || null,
-                            country: country,
-                            limit: parseInt(limit),
-                            filters: filters
-                        }),
-                        signal: controller.signal
-                    });
-                } else {
-                    // Usar GET para filtros simples
-                    response = await fetch(url, {
-                        signal: controller.signal
-                    });
-                }
+                // Usar GET simples
+                const response = await fetch(url, {
+                    signal: controller.signal
+                });
                 
                 clearTimeout(timeoutId);
                 clearInterval(progressInterval);
