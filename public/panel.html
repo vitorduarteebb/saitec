@@ -963,12 +963,14 @@
                 params.append('country', country);
                 params.append('limit', limit);
                 
-                // Adicionar filtros como query params ou JSON no body
-                // Vamos usar POST para filtros complexos
                 const url = `/trends/top20?${params.toString()}`;
                 
                 // Fazer requisição POST com filtros no body se houver filtros avançados
                 const hasAdvancedFilters = Object.keys(filters).length > 3; // Mais que niche, country, limit
+                
+                // Fazer requisição com timeout aumentado (10 minutos para scraping)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutos
                 
                 let response;
                 if (hasAdvancedFilters) {
@@ -983,12 +985,17 @@
                             country: country,
                             limit: parseInt(limit),
                             filters: filters
-                        })
+                        }),
+                        signal: controller.signal
                     });
                 } else {
                     // Usar GET para filtros simples
-                    response = await fetch(url);
+                    response = await fetch(url, {
+                        signal: controller.signal
+                    });
                 }
+                
+                clearTimeout(timeoutId);
                 
                 // Verificar se há coleta em andamento
                 const result = await response.json();
