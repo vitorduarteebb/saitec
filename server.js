@@ -18,6 +18,10 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configurar timeout para requisições longas (scraping pode demorar)
+// Timeout padrão do Express é 2 minutos, aumentando para 15 minutos
+app.timeout = 15 * 60 * 1000; // 15 minutos
+
 // Configuração de CORS - permitir apenas domínios específicos em produção
 const corsOptions = {
   origin: process.env.CORS_ORIGIN || '*', // Em produção, definir domínio específico
