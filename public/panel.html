@@ -762,6 +762,203 @@
         let allTrends = [];
         let progressEventSource = null;
 
+        // Função principal para carregar tendências
+        async function loadTrends(showProgress = false) {
+            const statusEl = document.getElementById('status');
+            const statusText = document.getElementById('statusText');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressFill = document.getElementById('progressFill');
+            const progressMessage = document.getElementById('progressMessage');
+            const progressPercent = document.getElementById('progressPercent');
+            const refreshSpinner = document.getElementById('refreshSpinner');
+            const tbody = document.getElementById('trendsBody');
+            
+            // Mostrar status
+            statusEl.style.display = 'block';
+            statusEl.className = 'status';
+            
+            if (showProgress) {
+                progressContainer.style.display = 'block';
+                progressFill.style.width = '0%';
+                progressPercent.textContent = '0%';
+                refreshSpinner.style.display = 'inline-block';
+            } else {
+                progressContainer.style.display = 'none';
+            }
+            
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="empty-state">
+                        <div class="loading-spinner" style="margin: 0 auto 20px;"></div>
+                        <h3>Carregando tendências...</h3>
+                    </td>
+                </tr>
+            `;
+
+            try {
+                // Coleta simplificada - apenas quantidade
+                const limit = document.getElementById('filterLimit').value || '20';
+                const country = 'BR'; // País fixo
+                
+                const url = `/trends/top20?country=${country}&limit=${limit}`;
+                
+                // Log de início
+                console.log('[Panel] Iniciando coleta de TikTok Shop...', { country, limit, url });
+                
+                // Atualizar progresso visual
+                if (showProgress) {
+                    progressFill.style.width = '10%';
+                    progressPercent.textContent = '10%';
+                    progressMessage.textContent = 'Buscando TikTok Shop no For You...';
+                    statusText.textContent = '🔄 Buscando TikTok Shop no For You...';
+                }
+                
+                // Fazer requisição com timeout aumentado (10 minutos para scraping)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutos
+                
+                // Atualizar progresso durante a requisição
+                const progressInterval = setInterval(() => {
+                    if (showProgress) {
+                        const current = parseInt(progressPercent.textContent) || 10;
+                        if (current < 90) {
+                            const newProgress = Math.min(90, current + 5);
+                            progressFill.style.width = newProgress + '%';
+                            progressPercent.textContent = newProgress + '%';
+                            progressMessage.textContent = `Coletando vídeos... (${newProgress}%)`;
+                            statusText.textContent = `🔄 Coletando vídeos do TikTok Shop... (${newProgress}%)`;
+                        }
+                    }
+                }, 2000); // Atualizar a cada 2 segundos
+                
+                console.log('[Panel] Fazendo requisição para:', url);
+                const startTime = Date.now();
+                
+                // Usar GET simples
+                const response = await fetch(url, {
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                clearInterval(progressInterval);
+                
+                const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                console.log(`[Panel] Resposta recebida em ${elapsedTime}s. Status:`, response.status);
+                
+                // Verificar se a resposta é JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    console.error('[Panel] Resposta não é JSON:', { status: response.status, contentType, text: text.substring(0, 200) });
+                    throw new Error(`Resposta não é JSON. Status: ${response.status}. Resposta: ${text.substring(0, 200)}`);
+                }
+                
+                const result = await response.json();
+                console.log('[Panel] Resultado recebido:', { success: result.success, inProgress: result.inProgress, count: result.count });
+                
+                // Verificar se há coleta em andamento
+                if (result.inProgress && result.redirectToProgress) {
+                    // Há uma coleta em andamento, conectar ao SSE para mostrar progresso
+                    console.log('[Panel] Coleta já em andamento, conectando ao progresso...');
+                    statusText.textContent = `🔄 ${result.message || 'Coleta em andamento...'}`;
+                    
+                    if (showProgress) {
+                        progressContainer.style.display = 'block';
+                        progressFill.style.width = `${result.progress || 0}%`;
+                        progressPercent.textContent = `${result.progress || 0}%`;
+                        progressMessage.textContent = result.message || 'Aguardando...';
+                    }
+                    
+                    // Conectar ao SSE para atualizações em tempo real
+                    connectToProgress();
+                    
+                    // Aguardar a coleta terminar e buscar resultados
+                    await waitForCollectionComplete();
+                    
+                    // Buscar resultados após coleta completar
+                    const finalResponse = await fetch(url);
+                    const finalResult = await finalResponse.json();
+                    
+                    if (finalResult.success) {
+                        allTrends = finalResult.data || [];
+                        displayTrends(allTrends);
+                        
+                        refreshSpinner.style.display = 'none';
+                        statusEl.className = 'status success';
+                        statusText.textContent = `✅ ${allTrends.length} tendências carregadas com sucesso`;
+                        progressContainer.style.display = 'none';
+                        
+                        setTimeout(() => {
+                            statusEl.style.display = 'none';
+                        }, 3000);
+                    } else {
+                        throw new Error(finalResult.error || 'Erro ao carregar tendências');
+                    }
+                    
+                    return; // Sair da função aqui
+                }
+                
+                // Se não há coleta em andamento, continuar normalmente
+                if (!result.success) {
+                    throw new Error(result.error || 'Erro ao carregar tendências');
+                }
+                
+                // Atualizar progresso
+                if (showProgress) {
+                    progressFill.style.width = '95%';
+                    progressPercent.textContent = '95%';
+                    progressMessage.textContent = 'Processando resposta...';
+                    statusText.textContent = '🔄 Processando resposta...';
+                }
+                
+                allTrends = result.data || [];
+                displayTrends(allTrends);
+
+                // Fechar conexão SSE se estiver aberta
+                if (progressEventSource) {
+                    progressEventSource.close();
+                    progressEventSource = null;
+                }
+
+                refreshSpinner.style.display = 'none';
+                statusEl.className = 'status success';
+                statusText.textContent = `✅ ${allTrends.length} tendências carregadas com sucesso`;
+                progressContainer.style.display = 'none';
+                
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 3000);
+
+            } catch (error) {
+                console.error('[Panel] Erro ao carregar tendências:', error);
+                
+                refreshSpinner.style.display = 'none';
+                
+                // Fechar conexão SSE se estiver aberta
+                if (progressEventSource) {
+                    progressEventSource.close();
+                    progressEventSource = null;
+                }
+                
+                statusEl.className = 'status error';
+                statusText.textContent = `❌ Erro: ${error.message}`;
+                progressContainer.style.display = 'none';
+                
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="empty-state">
+                            <h3>❌ Erro ao carregar tendências</h3>
+                            <p>${error.message}</p>
+                        </td>
+                    </tr>
+                `;
+                
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 10000);
+            }
+        }
+
         async function loadTrendsWithLogin() {
             const statusEl = document.getElementById('status');
             const statusText = document.getElementById('statusText');
@@ -945,37 +1142,30 @@
                 }
                 
                 // Atualizar progresso
-                progressFill.style.width = '30%';
-                progressPercent.textContent = '30%';
-                progressMessage.textContent = 'Carregando tendências...';
-                statusText.textContent = '⏳ Carregando vídeos virais do TikTok...';
-                
-                // Verificar se a resposta é JSON
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    const text = await response.text();
-                    throw new Error(`Resposta não é JSON. Status: ${response.status}. Resposta: ${text.substring(0, 200)}`);
+                if (showProgress) {
+                    progressFill.style.width = '95%';
+                    progressPercent.textContent = '95%';
+                    progressMessage.textContent = 'Processando resposta...';
+                    statusText.textContent = '🔄 Processando resposta...';
                 }
                 
-                const result = await response.json();
-
-                if (!result.success) {
-                    throw new Error(result.error || 'Erro ao carregar tendências');
-                }
-
                 allTrends = result.data || [];
                 displayTrends(allTrends);
 
-                progressFill.style.width = '100%';
-                progressPercent.textContent = '100%';
-                progressMessage.textContent = 'Coleta concluída!';
+                // Fechar conexão SSE se estiver aberta
+                if (progressEventSource) {
+                    progressEventSource.close();
+                    progressEventSource = null;
+                }
+
+                refreshSpinner.style.display = 'none';
                 statusEl.className = 'status success';
                 statusText.textContent = `✅ ${allTrends.length} tendências carregadas com sucesso`;
+                progressContainer.style.display = 'none';
                 
                 setTimeout(() => {
-                    progressContainer.style.display = 'none';
                     statusEl.style.display = 'none';
-                }, 5000);
+                }, 3000);
 
             } catch (error) {
                 console.error('Erro:', error);
