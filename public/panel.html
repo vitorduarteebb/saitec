@@ -1316,26 +1316,20 @@
         // Atualizar link do CSV dinamicamente
         function updateCSVLink() {
             const csvLink = document.getElementById('downloadCSV');
-            const niche = document.getElementById('filterNiche').value || '';
-            const limit = document.getElementById('filterLimit').value || '20';
+            if (!csvLink) return; // Se o elemento não existir, sair
+            
+            const filterLimitEl = document.getElementById('filterLimit');
+            const limit = filterLimitEl ? filterLimitEl.value || '20' : '20';
             const country = 'BR';
             
-            let csvUrl = `/trends/top20.csv?niche=${niche}&country=${country}&limit=${limit}`;
+            let csvUrl = `/trends/top20.csv?country=${country}&limit=${limit}`;
             csvLink.href = csvUrl;
         }
 
         // Event listeners
-        const filterNicheEl = document.getElementById('filterNiche');
-        if (filterNicheEl) {
-            filterNicheEl.addEventListener('change', () => {
-                applyFilters();
-                updateCSVLink();
-            });
-        }
         const filterLimitEl = document.getElementById('filterLimit');
         if (filterLimitEl) {
             filterLimitEl.addEventListener('change', () => {
-                applyFilters();
                 updateCSVLink();
             });
         }
