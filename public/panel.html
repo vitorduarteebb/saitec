@@ -1242,6 +1242,37 @@
             };
         }
 
+        // Função para aguardar conclusão da coleta
+        async function waitForCollectionComplete() {
+            return new Promise((resolve) => {
+                const checkInterval = setInterval(async () => {
+                    try {
+                        const limit = document.getElementById('filterLimit')?.value || '20';
+                        const country = 'BR';
+                        const url = `/trends/top20?country=${country}&limit=${limit}`;
+                        
+                        const response = await fetch(url);
+                        const result = await response.json();
+                        
+                        if (!result.inProgress) {
+                            clearInterval(checkInterval);
+                            resolve();
+                        }
+                    } catch (error) {
+                        console.error('[Panel] Erro ao verificar status:', error);
+                        clearInterval(checkInterval);
+                        resolve(); // Resolver mesmo com erro para não travar
+                    }
+                }, 2000); // Verificar a cada 2 segundos
+                
+                // Timeout de segurança (10 minutos)
+                setTimeout(() => {
+                    clearInterval(checkInterval);
+                    resolve();
+                }, 600000);
+            });
+        }
+
         function displayTrends(trends) {
             const tbody = document.getElementById('trendsBody');
 
