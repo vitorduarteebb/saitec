@@ -1383,6 +1383,11 @@ const server = app.listen(PORT, () => {
   }
 });
 
+// Configurar timeout do servidor para requisições longas (scraping pode demorar até 10 minutos)
+server.timeout = 15 * 60 * 1000; // 15 minutos
+server.keepAliveTimeout = 15 * 60 * 1000; // 15 minutos
+server.headersTimeout = 16 * 60 * 1000; // 16 minutos (deve ser maior que keepAliveTimeout)
+
 // Tratamento de erro ao iniciar servidor
 server.on('error', (error) => {
   if (error.code === 'EADDRINUSE') {
