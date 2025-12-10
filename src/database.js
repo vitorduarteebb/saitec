@@ -221,9 +221,10 @@ async function insertTrends(trends) {
  * @param {number} options.limit - Limite de resultados
  * @param {string} options.niche - Filtrar por nicho (opcional)
  * @param {string} options.source - Filtrar por fonte (opcional)
+ * @param {string} options.date - Filtrar por data (YYYY-MM-DD) (opcional)
  * @returns {Promise<Array>} Lista de tendências
  */
-async function getLatestTrends({ limit = 20, niche = null, source = null } = {}) {
+async function getLatestTrends({ limit = 20, niche = null, source = null, date = null } = {}) {
   const connection = await getPool().getConnection();
   
   try {
@@ -243,6 +244,11 @@ async function getLatestTrends({ limit = 20, niche = null, source = null } = {})
       params.push(source);
     }
 
+    if (date) {
+      query += ' AND DATE(collected_at) = ?';
+      params.push(date);
+    }
+
     query += ' ORDER BY collected_at DESC, engagement_score DESC LIMIT ?';
     params.push(limit);
 
@@ -250,6 +256,35 @@ async function getLatestTrends({ limit = 20, niche = null, source = null } = {})
     return rows;
   } catch (error) {
     console.error('[Database] Erro ao buscar tendências:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Busca datas disponíveis com coletas
+ * @returns {Promise<Array>} Lista de datas (YYYY-MM-DD)
+ */
+async function getCollectionDates() {
+  const connection = await getPool().getConnection();
+  
+  try {
+    const query = `
+      SELECT DISTINCT DATE(collected_at) as date, COUNT(*) as count
+      FROM trends
+      GROUP BY DATE(collected_at)
+      ORDER BY date DESC
+      LIMIT 30
+    `;
+    
+    const [rows] = await connection.execute(query);
+    return rows.map(row => ({
+      date: row.date.toISOString().split('T')[0],
+      count: row.count
+    }));
+  } catch (error) {
+    console.error('[Database] Erro ao buscar datas de coleta:', error);
     throw error;
   } finally {
     connection.release();
@@ -485,6 +520,7 @@ module.exports = {
   insertTrend,
   insertTrends,
   getLatestTrends,
+  getCollectionDates,
   insertProduct,
   insertProducts,
   getProducts,

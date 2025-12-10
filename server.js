@@ -8,7 +8,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { getTopTrends, getTikTokShopTopProducts, getKalodataTopProducts } = require('./src/trendsService');
-const { insertTrends, testConnection, getLatestTrends, insertProducts, getProducts } = require('./src/database');
+const { insertTrends, testConnection, getLatestTrends, getCollectionDates, insertProducts, getProducts } = require('./src/database');
 const logger = require('./src/utils/logger');
 const { closeBrowser } = require('./src/scrapers/tiktokScraper');
 const { runDailyCollection } = require('./scripts/run-daily-collection');
@@ -360,6 +360,34 @@ app.get('/trends/top20', apiLimiter, async (req, res) => {
       language: trend.language,
       collectedAt: trend.collectedAt
     }));
+
+    // Salvar tendências no banco de dados automaticamente
+    try {
+      const trendsToSave = trends.map(trend => ({
+        source: trend.source,
+        niche: niche || null,
+        title: trend.title,
+        description: trend.description || null,
+        videoUrl: trend.videoUrl,
+        thumbUrl: trend.thumbUrl || null,
+        soundName: trend.soundName || null,
+        authorHandle: trend.authorHandle || null,
+        views: trend.views || 0,
+        likes: trend.likes || 0,
+        comments: trend.comments || 0,
+        shares: trend.shares || 0,
+        engagementScore: trend.engagementScore || trend.score || 0,
+        country: country,
+        language: trend.language || null,
+        collectedAt: trend.collectedAt || new Date()
+      }));
+      
+      const saveResult = await insertTrends(trendsToSave);
+      logger.info(`[API] Tendências salvas no banco: ${saveResult.inserted} inseridas, ${saveResult.skipped} duplicadas`);
+    } catch (saveError) {
+      logger.error('[API] Erro ao salvar tendências no banco:', saveError);
+      // Não falhar a requisição se o salvamento der erro
+    }
 
     res.json({
       success: true,
@@ -1170,25 +1198,70 @@ app.get('/trends/latest', apiLimiter, async (req, res) => {
     const {
       limit = 20,
       niche = null,
-      source = null
+      source = null,
+      date = null
     } = req.query;
 
     const trends = await getLatestTrends({
       limit: parseInt(limit),
       niche: niche || null,
-      source: source || null
+      source: source || null,
+      date: date || null
     });
+
+    // Formatar para o frontend
+    const formattedTrends = trends.map((trend, index) => ({
+      id: trend.id,
+      title: trend.title,
+      mainHashtag: null, // Pode extrair do título se necessário
+      origin: trend.source,
+      metrics: {
+        views: trend.views || 0,
+        likes: trend.likes || 0,
+        comments: trend.comments || 0,
+        shares: trend.shares || 0
+      },
+      score: trend.engagement_score || 0,
+      engagementScore: trend.engagement_score || 0,
+      url: trend.video_url,
+      thumbnail: trend.thumb_url,
+      author: trend.author_handle,
+      language: trend.language,
+      collectedAt: trend.collected_at
+    }));
 
     res.json({
       success: true,
-      count: trends.length,
-      data: trends
+      count: formattedTrends.length,
+      data: formattedTrends
     });
   } catch (error) {
     logger.error('[API] Erro ao buscar últimas tendências:', error);
     res.status(500).json({
       success: false,
       error: 'Erro ao buscar últimas tendências',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /trends/collected/dates
+ * Retorna lista de datas disponíveis com coletas
+ */
+app.get('/trends/collected/dates', apiLimiter, async (req, res) => {
+  try {
+    const dates = await getCollectionDates();
+    res.json({
+      success: true,
+      count: dates.length,
+      data: dates
+    });
+  } catch (error) {
+    logger.error('[API] Erro ao buscar datas de coleta:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar datas de coleta',
       message: error.message
     });
   }
