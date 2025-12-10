@@ -1943,7 +1943,7 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
     
     if (needsLogin) {
       logger.warn(`[TikTok CC] ⚠️ Login necessário. Iniciando processo de login...`);
-      const loginSuccess = await loginTikTok(page);
+      const loginSuccess = await loginToTikTok(page);
       
       if (!loginSuccess) {
         throw new Error('Login no TikTok falhou. Não é possível acessar For You sem login.');

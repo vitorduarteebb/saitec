@@ -385,160 +385,42 @@ function applyAdvancedFilters(trends, filters = {}) {
 }
 
 /**
- * Aplica filtros nas tendências coletadas
+ * Aplica filtros simplificados - apenas ordena por métricas
  * @param {Array} trends - Lista de tendências
- * @param {Object} filters - Objetos de filtro
- * @returns {Array} Tendências filtradas
+ * @param {Object} filters - Objetos de filtro (não usado mais, mantido para compatibilidade)
+ * @returns {Array} Tendências ordenadas por métricas
  */
 function applyFilters(trends, filters = {}) {
-  let filtered = [...trends];
-
-  // Filtro por mínimo de views
-  // Lê do .env, default = 0 (sem filtro)
-  const minViewsEnv = process.env.MIN_VIEWS;
-  const minViewsNumber = Number(minViewsEnv);
-  const minViews = filters.minViews !== undefined 
-    ? Number(filters.minViews) 
-    : (!minViewsEnv || isNaN(minViewsNumber) ? 0 : minViewsNumber);
+  // SIMPLIFICADO: Apenas ordenar por métricas (likes, comentários, visualizações)
+  // Não aplicar filtros complexos - apenas ordenar pelos maiores números
   
-  // Filtro por mínimo de curtidas (PRINCIPAL PARA VÍDEOS VIRAIS)
-  const minLikesEnv = process.env.MIN_LIKES;
-  const minLikesNumber = Number(minLikesEnv);
-  const minLikes = filters.minLikes !== undefined
-    ? Number(filters.minLikes)
-    : (!minLikesEnv || isNaN(minLikesNumber) ? 50000 : minLikesNumber); // Padrão: 50k curtidas
+  logger.info(`[applyFilters] Ordenando ${trends.length} tendências por métricas (likes, comentários, visualizações)...`);
   
-  // Log de debug para entender o que está sendo filtrado
-  logger.info(
-    `[applyFilters] Filtrando ${filtered.length} tendências com mínimo de ${minViews} views e ${minLikes} curtidas`
-  );
+  // Ordenar por score de métricas: likes * 2 + views + comments * 3 + shares * 5
+  const sorted = trends.sort((a, b) => {
+    const scoreA = (a.likes || a.metrics?.likes || 0) * 2 + 
+                   (a.views || a.metrics?.views || 0) + 
+                   (a.comments || a.metrics?.comments || 0) * 3 + 
+                   (a.shares || a.metrics?.shares || 0) * 5;
+    const scoreB = (b.likes || b.metrics?.likes || 0) * 2 + 
+                   (b.views || b.metrics?.views || 0) + 
+                   (b.comments || b.metrics?.comments || 0) * 3 + 
+                   (b.shares || b.metrics?.shares || 0) * 5;
+    return scoreB - scoreA; // Maior primeiro
+  });
   
-  // Aplicar filtro de views
-  if (minViews && minViews > 0) {
-    const beforeViews = filtered.length;
-    filtered = filtered.filter(item => {
-      const views = item.views || item.metrics?.views || 0;
-      return views >= minViews;
-    });
-    logger.info(`[applyFilters] Após filtro de views: ${filtered.length} tendências (descartadas: ${beforeViews - filtered.length})`);
-  }
-  
-  // Aplicar filtro de curtidas (FILTRO PRINCIPAL)
-  // FALLBACK: Se temos poucos vídeos (< 5), relaxar filtro para garantir dados
-  if (minLikes && minLikes > 0) {
-    const beforeLikes = filtered.length;
-    let afterLikes = filtered.filter(item => {
+  // Log dos top 3 para debug
+  if (sorted.length > 0) {
+    sorted.slice(0, 3).forEach((item, idx) => {
       const likes = item.likes || item.metrics?.likes || 0;
-      return likes >= minLikes;
+      const views = item.views || item.metrics?.views || 0;
+      const comments = item.comments || item.metrics?.comments || 0;
+      logger.info(`[applyFilters] Top ${idx + 1}: likes=${likes.toLocaleString()}, views=${views.toLocaleString()}, comments=${comments.toLocaleString()}, title="${item.title?.substring(0, 40)}"`);
     });
-    
-    // FALLBACK INTELIGENTE: Se após filtro ficou muito pouco (< 5 vídeos) e tínhamos mais antes
-    // Relaxar filtro progressivamente para garantir dados
-    if (afterLikes.length < 5 && beforeLikes > afterLikes.length && beforeLikes >= 3) {
-      // Tentar 50% do mínimo primeiro
-      const relaxedMinLikes = Math.floor(minLikes * 0.5); // 50% do mínimo
-      logger.warn(`[applyFilters] ⚠️ Apenas ${afterLikes.length} vídeos após filtro de ${minLikes} curtidas. Relaxando para ${relaxedMinLikes} curtidas...`);
-      afterLikes = filtered.filter(item => {
-        const likes = item.likes || item.metrics?.likes || 0;
-        return likes >= relaxedMinLikes;
-      });
-      
-      // Se ainda tiver poucos, relaxar para 10% do mínimo (ou mínimo de 1000)
-      if (afterLikes.length < 3 && beforeLikes >= 3) {
-        const veryRelaxedMinLikes = Math.max(1000, Math.floor(minLikes * 0.1)); // 10% ou mínimo 1000
-        logger.warn(`[applyFilters] ⚠️ Apenas ${afterLikes.length} vídeos após filtro relaxado. Relaxando ainda mais para ${veryRelaxedMinLikes} curtidas...`);
-        afterLikes = filtered.filter(item => {
-          const likes = item.likes || item.metrics?.likes || 0;
-          return likes >= veryRelaxedMinLikes;
-        });
-      }
-      
-      // ÚLTIMO RECURSO: Se ainda tiver poucos, aceitar qualquer vídeo com curtidas > 0
-      if (afterLikes.length < 3 && beforeLikes >= 3) {
-        logger.warn(`[applyFilters] ⚠️ Apenas ${afterLikes.length} vídeos após filtros relaxados. Aceitando qualquer vídeo com curtidas > 0 (último recurso)...`);
-        afterLikes = filtered.filter(item => {
-          const likes = item.likes || item.metrics?.likes || 0;
-          return likes > 0;
-        });
-      }
-      
-      // SE MESMO ASSIM ESTIVER VAZIO: retornar todos (sem filtro de curtidas)
-      if (afterLikes.length === 0 && beforeLikes > 0) {
-        logger.warn(`[applyFilters] ⚠️ Nenhum vídeo passou nos filtros de curtidas. Retornando todos os ${beforeLikes} vídeos coletados (sem filtro de curtidas)...`);
-        afterLikes = filtered; // Retornar todos sem filtro de curtidas
-      }
-      
-      logger.info(`[applyFilters] Após filtro relaxado de curtidas: ${afterLikes.length} tendências`);
-    }
-    
-    filtered = afterLikes;
-    logger.info(`[applyFilters] Após filtro de curtidas: ${filtered.length} tendências (descartadas: ${beforeLikes - filtered.length})`);
-    
-    // Log detalhado dos primeiros itens para debug
-    if (filtered.length > 0) {
-      filtered.slice(0, 3).forEach((item, idx) => {
-        const likes = item.likes || item.metrics?.likes || 0;
-        logger.info(`[applyFilters] Item ${idx + 1}: source="${item.source}", likes=${likes}, title="${item.title?.substring(0, 40)}"`);
-      });
-    }
-  } else {
-    logger.warn('[applyFilters] MIN_LIKES desativado (<= 0). Retornando todas as tendências SEM filtro de curtidas.');
-    
-    // Log detalhado dos primeiros itens para debug
-    if (filtered.length > 0) {
-      filtered.slice(0, 3).forEach((item, idx) => {
-        const likes = item.likes || item.metrics?.likes || 0;
-        logger.info(`[applyFilters] Item ${idx + 1}: source="${item.source}", likes=${likes}, title="${item.title?.substring(0, 40)}"`);
-      });
-    }
   }
   
-  // Garantir que retornamos pelo menos os TOP 20 (ou todos se tiver menos)
-  const finalCount = Math.min(20, filtered.length);
-  if (filtered.length > 20) {
-    logger.info(`[applyFilters] Limitando a ${finalCount} tendências (Top 20)`);
-  } else if (filtered.length < 20) {
-    logger.warn(`[applyFilters] ⚠️ Apenas ${filtered.length} tendências passaram nos filtros (objetivo: 20)`);
-  }
-
-  // Filtro por blacklist de palavras
-  const blacklistStr = filters.blacklist || process.env.BLACKLIST_WORDS || '';
-  if (blacklistStr) {
-    const blacklist = blacklistStr.split(',').map(w => w.trim().toLowerCase());
-    filtered = filtered.filter(item => {
-      const text = `${item.title} ${item.description || ''}`.toLowerCase();
-      return !blacklist.some(word => text.includes(word));
-    });
-  }
-
-  // Filtro por idioma (mantido para compatibilidade)
-  if (filters.language) {
-    filtered = filtered.filter(item => item.language === filters.language);
-  }
-
-  // Filtro por autor (blacklist de handles) - mantido para compatibilidade
-  if (filters.excludedAuthors && filters.excludedAuthors.length > 0) {
-    filtered = filtered.filter(item => {
-      if (!item.authorHandle) return true;
-      return !filters.excludedAuthors.some(author => 
-        item.authorHandle.toLowerCase().includes(author.toLowerCase())
-      );
-    });
-  }
-
-  // APLICAR FILTROS AVANÇADOS se houver
-  // Verificar se há filtros avançados (além dos básicos)
-  const hasAdvancedFilters = filters.minER || filters.maxAgeHours || filters.keywords || 
-                              filters.requiredHashtags || filters.excludeCreators || 
-                              filters.minFollowers || filters.maxFollowers || filters.growthRate;
-  
-  if (hasAdvancedFilters) {
-    logger.info('[applyFilters] Aplicando filtros avançados...');
-    filtered = applyAdvancedFilters(filtered, filters);
-  }
-
   // Retornar TOP 20 (ou todos se tiver menos)
-  return filtered.slice(0, 20);
+  return sorted.slice(0, 20);
 }
 
 /**
