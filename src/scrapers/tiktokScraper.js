@@ -807,6 +807,12 @@ function applySmartFilters(rawTrends, options = {}) {
     return rawTrends;
   }
 
+  // Se ainda não tem vídeos após todos os filtros, retornar todos sem filtro de curtidas
+  if (trendsAfterLikes.length === 0 && rawTrends.length > 0) {
+    logger.warn(`[TikTok CC] [FiltersFallback] ⚠️ Nenhum vídeo passou no filtro de ${minLikes} curtidas. Retornando todos os ${rawTrends.length} vídeos coletados (sem filtro de curtidas)...`);
+    return trendsAfterViews.slice(0, 20); // Retornar todos sem filtro de curtidas, limitado a 20
+  }
+  
   // Garantir que retornamos pelo menos os TOP 20 (ou todos se tiver menos)
   const finalCount = Math.min(20, trendsAfterLikes.length);
   if (trendsAfterLikes.length > 20) {
