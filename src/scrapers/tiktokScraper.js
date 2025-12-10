@@ -757,9 +757,11 @@ function applySmartFilters(rawTrends, options = {}) {
 
     // Log de debug: mostrar curtidas dos primeiros vídeos
     if (rawTrends.length > 0) {
+      logger.info(`[TikTok CC] [FiltersFallback] 📊 DEBUG: Primeiros 5 vídeos brutos:`);
       rawTrends.slice(0, 5).forEach((t, idx) => {
         const likes = t.likes || t.metrics?.likes || 0;
-        logger.debug(`[TikTok CC] [FiltersFallback] Vídeo ${idx + 1}: likes=${likes}, title="${(t.title || '').substring(0, 40)}"`);
+        const views = t.views || t.metrics?.views || 0;
+        logger.info(`[TikTok CC] [FiltersFallback]   Vídeo ${idx + 1}: likes=${likes.toLocaleString()}, views=${views.toLocaleString()}, title="${(t.title || '').substring(0, 50)}"`);
       });
     }
 
@@ -2401,19 +2403,53 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
     
       if (trendsFromJSON.length > 0) {
       logger.info(`[TikTok CC] 🎯 PRIORIDADE: Processando ${trendsFromJSON.length} vídeos do JSON (já ordenados por viralidade, QUALQUER PAÍS)...`);
-      // Aplicar filtros SEM restrição de país, MAS com filtro de curtidas
+      
+      // Log detalhado dos primeiros vídeos para debug
+      if (trendsFromJSON.length > 0) {
+        logger.info(`[TikTok CC] 📊 DEBUG: Primeiros 3 vídeos do JSON:`);
+        trendsFromJSON.slice(0, 3).forEach((v, idx) => {
+          const likes = v.likes || v.metrics?.likes || 0;
+          const views = v.views || v.metrics?.views || 0;
+          logger.info(`[TikTok CC]   Vídeo ${idx + 1}: likes=${likes.toLocaleString()}, views=${views.toLocaleString()}, title="${v.title?.substring(0, 50)}"`);
+        });
+      }
+      
+      // Aplicar filtros SEM restrição de país, MAS com filtro de curtidas RELAXADO
+      // Se MIN_LIKES não estiver definido ou for muito alto, usar um valor mais baixo
+      const minLikesEnv = parseInt(process.env.MIN_LIKES || '0', 10);
+      const minLikesToUse = minLikesEnv > 0 ? minLikesEnv : 1000; // Se não definido, usar 1k como mínimo
+      
       const jsonFiltered = applySmartFilters(trendsFromJSON, {
         targetCountry: 'GLOBAL', // Aceitar qualquer país
         strictCountry: false, // NÃO filtrar por país
         minViews: parseInt(process.env.MIN_VIEWS || '0', 10),
-        minLikes: parseInt(process.env.MIN_LIKES || '50000', 10), // Padrão: 50k curtidas
+        minLikes: minLikesToUse, // Usar valor ajustado
         niche: null, // Aceitar qualquer nicho (não focar só em beleza)
         disableBlacklist: DISABLE_BLACKLIST,
         disableNiche: true, // Desabilitar filtro de nicho
       });
-      logger.info(`[TikTok CC] JSON: ${jsonFiltered.length} vídeos válidos após filtros (apenas blacklist aplicada, qualquer país aceito)`);
+      logger.info(`[TikTok CC] JSON: ${jsonFiltered.length} vídeos válidos após filtros (MIN_LIKES=${minLikesToUse}, apenas blacklist aplicada, qualquer país aceito)`);
       
-      if (jsonFiltered.length > 0) {
+      // Se nenhum vídeo passou no filtro, tentar sem filtro de curtidas
+      if (jsonFiltered.length === 0 && trendsFromJSON.length > 0) {
+        logger.warn(`[TikTok CC] ⚠️ Nenhum vídeo passou no filtro de ${minLikesToUse} curtidas. Tentando sem filtro de curtidas...`);
+        const jsonFilteredNoLikes = applySmartFilters(trendsFromJSON, {
+          targetCountry: 'GLOBAL',
+          strictCountry: false,
+          minViews: 0,
+          minLikes: 0, // SEM filtro de curtidas
+          niche: null,
+          disableBlacklist: DISABLE_BLACKLIST,
+          disableNiche: true,
+        });
+        if (jsonFilteredNoLikes.length > 0) {
+          logger.info(`[TikTok CC] ✅ Encontrados ${jsonFilteredNoLikes.length} vídeos SEM filtro de curtidas. Usando estes vídeos.`);
+          finalTrends = jsonFilteredNoLikes.slice(0, 20);
+          // Continuar para retornar estes vídeos
+        }
+      }
+      
+      if (jsonFiltered.length > 0 && finalTrends.length === 0) {
         logger.info(`[TikTok CC] ✅ Usando ${jsonFiltered.length} vídeos do JSON (ordenados por viralidade, qualquer país!)`);
         finalTrends = jsonFiltered;
       }
