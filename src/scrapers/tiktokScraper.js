@@ -521,15 +521,24 @@ async function loginToTikTok(page) {
 
 async function initBrowser() {
   if (!browser) {
-    // SEMPRE usar modo headful (visível) para permitir login manual no For You
-    // Creative Center foi removido, então sempre precisamos de login
-    const headlessMode = process.env.HEADLESS === 'true'; // false por padrão para login manual
+    // Usar modo headless por padrão (funciona melhor em VPS sem servidor X)
+    // Login será feito via cookies salvos, não precisa de modo visível
+    // Se HEADLESS=false explicitamente, usar modo visível (requer X server)
+    const headlessEnv = process.env.HEADLESS;
+    let headlessMode = 'new'; // Padrão: headless moderno (funciona melhor)
+    
+    if (headlessEnv === 'false') {
+      headlessMode = false; // Modo visível (requer X server)
+    } else if (headlessEnv === 'true' || headlessEnv === 'old') {
+      headlessMode = 'old'; // Headless antigo (compatibilidade)
+    }
+    
     // Aumentar timeouts para evitar erros de timeout
     const timeout = parseInt(process.env.PUPPETEER_TIMEOUT || 300000); // 300 segundos (5 minutos)
     const protocolTimeout = parseInt(process.env.PUPPETEER_PROTOCOL_TIMEOUT || 600000); // 600 segundos (10 minutos) para protocolo
 
-    logger.info(`[TikTok CC] 🎯 Inicializando navegador para For You (login obrigatório)`);
-    logger.info(`[TikTok CC] ⚠️ Modo headless=${headlessMode} (false = visível, necessário para login manual)`);
+    logger.info(`[TikTok CC] 🎯 Inicializando navegador para For You (login via cookies)`);
+    logger.info(`[TikTok CC] ⚙️ Modo headless=${headlessMode === false ? 'false (visível)' : headlessMode === 'new' ? 'new (headless moderno)' : 'old (headless antigo)'}`);
     logger.info(`[TikTok CC] ⚙️ Timeouts: launch=${timeout}ms, protocol=${protocolTimeout}ms`);
 
     // Tentar fechar browser anterior se existir (pode estar travado)
@@ -543,7 +552,7 @@ async function initBrowser() {
     }
     
     browser = await puppeteer.launch({
-      headless: headlessMode, // false = modo headful (visível) para login manual
+      headless: headlessMode, // 'new' = headless moderno (padrão), false = visível, 'old' = headless antigo
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -558,7 +567,7 @@ async function initBrowser() {
       timeout: timeout,
       protocolTimeout: protocolTimeout // Timeout para operações de protocolo (ex: evaluate)
     });
-    logger.info(`Navegador Puppeteer inicializado em modo ${headlessMode ? 'headless' : 'headful'} (debug)`);
+    logger.info(`[TikTok CC] ✅ Navegador Puppeteer inicializado com sucesso`);
   }
   return browser;
 }
