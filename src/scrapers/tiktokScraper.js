@@ -2407,6 +2407,8 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
     }
     
     // ESTRATÉGIA 2: Extrair do DOM como complemento
+    // Sempre usar For You agora (Creative Center foi removido)
+    const useForYou = true;
     logger.debug(`[TikTok CC] Tentando extrair dados do DOM (${useForYou ? 'For You' : 'Creative Center'})...`);
     let trendsFromDOM = [];
     try {
