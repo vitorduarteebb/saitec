@@ -216,7 +216,12 @@ async function insertTrends(trends) {
           trend: trend.title || 'Sem título',
           error: error.message
         });
-        logger.warn(`[Database] Erro ao inserir tendência individual:`, error.message);
+        logger.error(`[Database] Erro ao inserir tendência individual:`, {
+          title: trend.title || 'Sem título',
+          error: error.message,
+          collectedAt: trend.collectedAt,
+          formattedDate: formatDateForMySQL(trend.collectedAt)
+        });
       }
     }
     
