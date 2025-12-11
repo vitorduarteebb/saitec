@@ -2420,11 +2420,51 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
       trendsFromDOM = [];
     }
     
-    // PRIORIDADE: JSON primeiro (tem métricas reais e já está ordenado por viralidade)
-    // MODO GLOBAL: Aceitar qualquer país, apenas filtrar spam
+    // PRIORIDADE: API interceptada primeiro (tem métricas reais)
+    // Depois JSON, depois DOM
     let finalTrends = [];
     
-      if (trendsFromJSON.length > 0) {
+    // Se temos vídeos da API interceptada, processar primeiro
+    if (trendsFromAPI.length > 0) {
+      logger.info(`[TikTok CC] 🎯 PRIORIDADE: Processando ${trendsFromAPI.length} vídeos da API interceptada (COM MÉTRICAS REAIS)...`);
+      
+      // Ordenar API por métricas
+      const sortedApiVideos = trendsFromAPI.sort((a, b) => {
+        const scoreA = (a.likes || a.metrics?.likes || 0) * 2 + 
+                       (a.views || a.metrics?.views || 0) + 
+                       (a.comments || a.metrics?.comments || 0) * 3 + 
+                       (a.shares || a.metrics?.shares || 0) * 5;
+        const scoreB = (b.likes || b.metrics?.likes || 0) * 2 + 
+                       (b.views || b.metrics?.views || 0) + 
+                       (b.comments || b.metrics?.comments || 0) * 3 + 
+                       (b.shares || b.metrics?.shares || 0) * 5;
+        return scoreB - scoreA;
+      });
+      
+      // Filtrar por TikTok Shop (mas se não encontrar, usar todos)
+      const apiShopVideos = sortedApiVideos.filter(video => {
+        const text = `${video.title || ''} ${video.description || ''} ${video.mainHashtag || ''}`.toLowerCase();
+        return text.includes('tiktok shop') || 
+               text.includes('tiktokshop') || 
+               text.includes('tiktok-shop') ||
+               text.includes('shop');
+      });
+      
+      logger.info(`[TikTok CC] ✅ Encontrados ${apiShopVideos.length} vídeos relacionados a TikTok Shop na API (de ${trendsFromAPI.length} total)`);
+      
+      // Se não encontrou vídeos específicos de shop, usar todos ordenados por métricas
+      if (apiShopVideos.length === 0 && sortedApiVideos.length > 0) {
+        logger.warn(`[TikTok CC] ⚠️ Nenhum vídeo específico de TikTok Shop encontrado na API. Usando todos os vídeos ordenados por métricas...`);
+        finalTrends = sortedApiVideos.slice(0, 20);
+      } else {
+        finalTrends = apiShopVideos.slice(0, 20);
+      }
+      
+      logger.info(`[TikTok CC] ✅ Usando ${finalTrends.length} vídeos da API ordenados por métricas`);
+    }
+    
+    // Se JSON retornou dados, adicionar também (complementar)
+    if (trendsFromJSON.length > 0) {
       logger.info(`[TikTok CC] 🎯 PRIORIDADE: Processando ${trendsFromJSON.length} vídeos do JSON (já ordenados por viralidade, QUALQUER PAÍS)...`);
       
       // Log detalhado dos primeiros vídeos para debug
@@ -2468,16 +2508,26 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
       
       // Se não encontrou vídeos específicos de shop, usar todos ordenados por métricas
       if (tiktokShopVideos.length === 0 && sortedVideos.length > 0) {
-        logger.warn(`[TikTok CC] ⚠️ Nenhum vídeo específico de TikTok Shop encontrado. Usando todos os vídeos ordenados por métricas...`);
-        finalTrends = sortedVideos.slice(0, 20);
+        logger.warn(`[TikTok CC] ⚠️ Nenhum vídeo específico de TikTok Shop encontrado no JSON. Usando todos os vídeos ordenados por métricas...`);
+        // Adicionar vídeos únicos (não duplicados)
+        const existingUrls = new Set(finalTrends.map(v => v.videoUrl || v.url));
+        const newVideos = sortedVideos
+          .filter(v => !existingUrls.has(v.videoUrl || v.url))
+          .slice(0, 20 - finalTrends.length);
+        finalTrends = [...finalTrends, ...newVideos];
       } else {
-        finalTrends = tiktokShopVideos.slice(0, 20);
+        // Adicionar vídeos únicos de TikTok Shop
+        const existingUrls = new Set(finalTrends.map(v => v.videoUrl || v.url));
+        const newVideos = tiktokShopVideos
+          .filter(v => !existingUrls.has(v.videoUrl || v.url))
+          .slice(0, 20 - finalTrends.length);
+        finalTrends = [...finalTrends, ...newVideos];
       }
       
-      logger.info(`[TikTok CC] ✅ Usando ${finalTrends.length} vídeos ordenados por métricas (maiores likes, comentários, visualizações)`);
+      logger.info(`[TikTok CC] ✅ Total após JSON: ${finalTrends.length} vídeos ordenados por métricas`);
     }
     
-    // Se JSON não retornou dados suficientes, usar API interceptada
+    // Se ainda não temos vídeos suficientes e temos API interceptada, adicionar mais
     if (finalTrends.length < 20 && trendsFromAPI.length > 0) {
       logger.info(`[TikTok CC] JSON retornou ${finalTrends.length} vídeos (objetivo: 20), adicionando da API interceptada...`);
       
@@ -2510,14 +2560,6 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
       
       finalTrends = [...finalTrends, ...newVideos];
       logger.info(`[TikTok CC] ✅ Adicionados ${newVideos.length} vídeos da API (total: ${finalTrends.length})`);
-      logger.info(`[TikTok CC] API: ${apiFiltered.length} vídeos válidos após filtros`);
-      
-      if (apiFiltered.length > 0) {
-        // Combinar com vídeos já coletados (evitar duplicatas)
-        const existingIds = new Set(finalTrends.map(t => t.id).filter(Boolean));
-        const newVideos = apiFiltered.filter(t => t.id && !existingIds.has(t.id));
-        finalTrends = finalTrends.concat(newVideos);
-        logger.info(`[TikTok CC] ✅ Adicionados ${newVideos.length} vídeos novos da API (total: ${finalTrends.length}, objetivo: 20)`);
         
         // Se ainda não temos 20, fazer mais scrolls AGRESSIVOS e aguardar mais batches
         if (finalTrends.length < 20) {
@@ -2658,8 +2700,68 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
       return bLikes - aLikes;
     });
     
+    // Garantir que retornamos pelo menos os vídeos coletados, mesmo que não sejam de TikTok Shop
+    if (finalTrends.length === 0) {
+      logger.warn(`[TikTok CC] ⚠️ Nenhum vídeo de TikTok Shop encontrado. Retornando todos os vídeos coletados ordenados por métricas...`);
+      
+      // Combinar todos os vídeos coletados
+      const allVideos = [...trendsFromAPI, ...trendsFromJSON, ...trendsFromDOM];
+      
+      // Remover duplicatas
+      const uniqueVideos = [];
+      const seenIds = new Set();
+      const seenUrls = new Set();
+      
+      for (const video of allVideos) {
+        const id = video.id || video.videoId;
+        const url = video.videoUrl || video.url;
+        
+        if (id && !seenIds.has(id)) {
+          seenIds.add(id);
+          uniqueVideos.push(video);
+        } else if (url && !seenUrls.has(url)) {
+          seenUrls.add(url);
+          uniqueVideos.push(video);
+        } else if (!id && !url) {
+          // Se não tem ID nem URL, verificar por título/autor
+          const isDuplicate = uniqueVideos.some(existing => 
+            existing.title === video.title && existing.authorHandle === video.authorHandle
+          );
+          if (!isDuplicate) {
+            uniqueVideos.push(video);
+          }
+        }
+      }
+      
+      // Ordenar por métricas
+      uniqueVideos.sort((a, b) => {
+        const scoreA = (a.likes || a.metrics?.likes || 0) * 2 + 
+                       (a.views || a.metrics?.views || 0) + 
+                       (a.comments || a.metrics?.comments || 0) * 3 + 
+                       (a.shares || a.metrics?.shares || 0) * 5;
+        const scoreB = (b.likes || b.metrics?.likes || 0) * 2 + 
+                       (b.views || b.metrics?.views || 0) + 
+                       (b.comments || b.metrics?.comments || 0) * 3 + 
+                       (b.shares || b.metrics?.shares || 0) * 5;
+        return scoreB - scoreA;
+      });
+      
+      finalTrends = uniqueVideos.slice(0, 20);
+      logger.info(`[TikTok CC] ✅ Retornando ${finalTrends.length} vídeos ordenados por métricas (sem filtro de TikTok Shop)`);
+    }
+    
     finalTrends = finalTrends.slice(0, 20);
     logger.info(`[TikTok CC] ✅ Total final: ${finalTrends.length} vídeos (objetivo: 20)`);
+    
+    // Log detalhado dos vídeos finais
+    if (finalTrends.length > 0) {
+      logger.info(`[TikTok CC] 📊 Primeiros 3 vídeos finais:`);
+      finalTrends.slice(0, 3).forEach((v, idx) => {
+        const likes = v.likes || v.metrics?.likes || 0;
+        const views = v.views || v.metrics?.views || 0;
+        logger.info(`[TikTok CC]   Vídeo ${idx + 1}: likes=${likes.toLocaleString()}, views=${views.toLocaleString()}, title="${v.title?.substring(0, 60)}"`);
+      });
+    }
     
     // Gerar logs finais e estatísticas (após aplicar filtros)
     // Calcular estatísticas para logs (usar dados já coletados)
