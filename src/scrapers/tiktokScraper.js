@@ -2563,9 +2563,9 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
       
       finalTrends = [...finalTrends, ...newVideos];
       logger.info(`[TikTok CC] ✅ Adicionados ${newVideos.length} vídeos da API (total: ${finalTrends.length})`);
-        
-        // Se ainda não temos 20, fazer mais scrolls AGRESSIVOS e aguardar mais batches
-        if (finalTrends.length < 20) {
+      
+      // Se ainda não temos 20, fazer mais scrolls AGRESSIVOS e aguardar mais batches
+      if (finalTrends.length < 20) {
           logger.info(`[TikTok CC] Ainda temos apenas ${finalTrends.length} vídeos. Fazendo scrolls AGRESSIVOS para interceptar mais batches...`);
           
           const initialApiCount = apiResponses.length;
