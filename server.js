@@ -1554,7 +1554,22 @@ app.get('/trends/tiktokshop', apiLimiter, async (req, res) => {
 
     logger.info(`[API] Buscando vídeos do TikTok Shop (limite: ${limit})`);
 
-    const videos = await scrapeTikTokShopSearch({ limit });
+    let videos = [];
+    try {
+      videos = await scrapeTikTokShopSearch({ limit });
+    } catch (scrapeError) {
+      logger.error('[API] Erro ao fazer scraping do TikTok Shop:', scrapeError);
+      return res.status(500).json({
+        success: false,
+        error: 'Erro ao buscar vídeos do TikTok Shop',
+        message: scrapeError.message || 'Erro desconhecido durante o scraping'
+      });
+    }
+    
+    if (!Array.isArray(videos)) {
+      logger.warn('[API] scrapeTikTokShopSearch não retornou array, usando array vazio');
+      videos = [];
+    }
 
     // Normalizar vídeos para o formato esperado
     const normalizedTrends = videos.map((video, index) => ({

@@ -3007,9 +3007,21 @@ async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
   let page = null;
 
   try {
-    // Inicializar navegador
+    // Inicializar navegador (criar novo para evitar conflitos)
     browser = await initBrowser();
+    
+    if (!browser) {
+      throw new Error('Falha ao inicializar navegador');
+    }
+    
     page = await browser.newPage();
+    
+    // Configurar user agent
+    const userAgent = getRandomUserAgent();
+    await page.setUserAgent(userAgent);
+    
+    // Configurar viewport
+    await page.setViewport({ width: 1920, height: 1080 });
     
     // Configurar interceptação de requisições da API
     const apiVideos = new Map();
@@ -3075,20 +3087,26 @@ async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
     // Fazer scroll para carregar mais vídeos
     logger.info('[TikTok Shop Search] Fazendo scroll para carregar vídeos...');
     
-    for (let i = 0; i < 10; i++) {
-      await page.evaluate(() => {
-        window.scrollBy(0, window.innerHeight);
-      });
-      await randomDelay(1000, 2000);
-      
-      if (apiVideos.size >= limit) {
-        logger.info(`[TikTok Shop Search] Coletados ${apiVideos.size} vídeos, suficiente para o limite de ${limit}`);
-        break;
+    for (let i = 0; i < 15; i++) {
+      try {
+        await page.evaluate(() => {
+          window.scrollBy(0, window.innerHeight);
+        });
+        await randomDelay(1500, 2500);
+        
+        if (apiVideos.size >= limit) {
+          logger.info(`[TikTok Shop Search] Coletados ${apiVideos.size} vídeos, suficiente para o limite de ${limit}`);
+          break;
+        }
+      } catch (scrollError) {
+        logger.warn(`[TikTok Shop Search] Erro no scroll ${i + 1}: ${scrollError.message}`);
       }
     }
 
     // Aguardar um pouco mais para garantir que todas as requisições foram interceptadas
     await randomDelay(3000, 5000);
+    
+    logger.info(`[TikTok Shop Search] Total de vídeos interceptados da API: ${apiVideos.size}`);
 
     // Extrair vídeos do DOM como fallback
     const domVideos = await page.evaluate(() => {
@@ -3203,19 +3221,22 @@ async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
 
   } catch (error) {
     logger.error('[TikTok Shop Search] Erro no scraping:', error);
+    logger.error('[TikTok Shop Search] Stack trace:', error.stack);
     throw error;
   } finally {
     scrapingLock = false;
     
     if (page) {
       try {
-        await page.close();
+        await page.close().catch(() => {});
       } catch (err) {
-        // Ignorar erros ao fechar página
+        logger.warn('[TikTok Shop Search] Erro ao fechar página:', err.message);
       }
     }
     
-    // Não fechar o browser aqui, pois pode estar sendo usado por outras funções
+    // Fechar browser se foi criado especificamente para esta busca
+    // (não fechar se for o browser global compartilhado)
+    // Por enquanto, deixar o browser aberto para reutilização
   }
 }
 
