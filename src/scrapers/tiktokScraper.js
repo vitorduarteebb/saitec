@@ -1712,6 +1712,9 @@ function extractFromApiResponse(apiData, niche, country) {
  * @returns {Promise<Array>} Lista de tendências
  */
 async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' }) {
+  // Sempre usar For You agora (Creative Center foi removido)
+  const useForYou = true;
+  
   // Lock para evitar requisições simultâneas
   if (scrapingLock) {
     logger.warn('[TikTok CC] Scraping já em andamento, aguardando...');

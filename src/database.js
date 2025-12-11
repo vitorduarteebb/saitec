@@ -249,8 +249,7 @@ async function getLatestTrends({ limit = 20, niche = null, source = null, date =
       params.push(date);
     }
 
-    query += ' ORDER BY collected_at DESC, engagement_score DESC LIMIT ?';
-    params.push(limit);
+    query += ` ORDER BY collected_at DESC, engagement_score DESC LIMIT ${parseInt(limit) || 20}`;
 
     const [rows] = await connection.execute(query, params);
     return rows;
@@ -501,8 +500,7 @@ async function getProducts({ limit = 100, source = null, country = null, date = 
       params.push(today);
     }
 
-    query += ' ORDER BY rank ASC, collected_at DESC LIMIT ?';
-    params.push(limit);
+    query += ` ORDER BY rank ASC, collected_at DESC LIMIT ${parseInt(limit) || 20}`;
 
     const [rows] = await connection.execute(query, params);
     return rows;
