@@ -1380,7 +1380,9 @@
                 const views = (trend.metrics?.views || trend.views || 0).toLocaleString('pt-BR');
                 const likes = (trend.metrics?.likes || trend.likes || 0).toLocaleString('pt-BR');
                 const comments = (trend.metrics?.comments || trend.comments || 0).toLocaleString('pt-BR');
-                const score = (trend.score || trend.engagementScore || 0).toFixed(2);
+                // Garantir que score seja um número antes de usar toFixed
+                const scoreValue = parseFloat(trend.score || trend.engagementScore || trend.engagement_score || 0);
+                const score = isNaN(scoreValue) ? '0.00' : scoreValue.toFixed(2);
                 
                 return `
                     <tr>

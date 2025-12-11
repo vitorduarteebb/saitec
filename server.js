@@ -1492,20 +1492,28 @@ app.get('/trends/latest', apiLimiter, async (req, res) => {
     });
 
     // Formatar para o frontend
-    const formattedTrends = trends.map((trend, index) => ({
-      id: trend.id,
-      title: trend.title,
-      mainHashtag: null, // Pode extrair do título se necessário
-      origin: trend.source,
-      metrics: {
-        views: trend.views || 0,
-        likes: trend.likes || 0,
-        comments: trend.comments || 0,
-        shares: trend.shares || 0
-      },
-      score: trend.engagement_score || 0,
-      engagementScore: trend.engagement_score || 0,
-      url: trend.video_url,
+    const formattedTrends = trends.map((trend, index) => {
+      // Garantir que valores numéricos sejam números, não strings
+      const views = parseInt(trend.views || 0, 10);
+      const likes = parseInt(trend.likes || 0, 10);
+      const comments = parseInt(trend.comments || 0, 10);
+      const shares = parseInt(trend.shares || 0, 10);
+      const engagementScore = parseFloat(trend.engagement_score || 0);
+      
+      return {
+        id: trend.id,
+        title: trend.title,
+        mainHashtag: null, // Pode extrair do título se necessário
+        origin: trend.source,
+        metrics: {
+          views: views,
+          likes: likes,
+          comments: comments,
+          shares: shares
+        },
+        score: engagementScore,
+        engagementScore: engagementScore,
+        url: trend.video_url,
       thumbnail: trend.thumb_url,
       author: trend.author_handle,
       language: trend.language,
