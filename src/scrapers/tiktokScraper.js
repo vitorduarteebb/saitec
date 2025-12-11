@@ -10,7 +10,8 @@ const logger = require('../utils/logger');
 const { retry } = require('../utils/retry');
 
 let browser = null;
-let scrapingLock = false; // Lock para evitar requisições simultâneas
+let scrapingLock = false; // Lock para evitar requisições simultâneas do Creative Center/For You
+let tiktokShopSearchLock = false; // Lock separado para busca do TikTok Shop
 
 /**
  * Flag global para filtro rígido de país
@@ -2994,15 +2995,25 @@ async function scrapeTikTokHashtags({ hashtags = ['#beleza'], country = 'BR' }) 
 async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
   logger.info(`[TikTok Shop Search] 🛍️ Iniciando busca por "tiktok shop" (limite: ${limit})`);
   
-  if (scrapingLock) {
-    logger.warn('[TikTok Shop Search] Scraping já em andamento, aguardando...');
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    if (scrapingLock) {
-      throw new Error('Scraping já em andamento. Aguarde a conclusão.');
+  // Usar lock separado para TikTok Shop Search
+  if (tiktokShopSearchLock) {
+    logger.warn('[TikTok Shop Search] Busca TikTok Shop já em andamento, aguardando...');
+    // Aguardar até 2 minutos para o lock ser liberado
+    let waitTime = 0;
+    const maxWaitTime = 120000; // 2 minutos
+    while (tiktokShopSearchLock && waitTime < maxWaitTime) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      waitTime += 2000;
+      if (waitTime % 10000 === 0) {
+        logger.info(`[TikTok Shop Search] Aguardando busca anterior finalizar... (${Math.floor(waitTime/1000)}s/${maxWaitTime/1000}s)`);
+      }
+    }
+    if (tiktokShopSearchLock) {
+      throw new Error('Busca TikTok Shop já em andamento. Aguarde a conclusão.');
     }
   }
 
-  scrapingLock = true;
+  tiktokShopSearchLock = true;
   let browser = null;
   let page = null;
 
@@ -3224,7 +3235,7 @@ async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
     logger.error('[TikTok Shop Search] Stack trace:', error.stack);
     throw error;
   } finally {
-    scrapingLock = false;
+    tiktokShopSearchLock = false;
     
     if (page) {
       try {
