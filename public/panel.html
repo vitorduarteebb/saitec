@@ -646,6 +646,34 @@
                     📊 <strong>Coleta Simplificada:</strong> O sistema busca especificamente por "TikTok Shop" no For You e ordena os vídeos por maiores métricas (likes, comentários, visualizações).
                 </p>
             </div>
+            
+            <!-- Tabela para aba Coletar Tendências -->
+            <div style="padding: 20px 40px; overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Vídeo</th>
+                            <th>Autor</th>
+                            <th>Visualizações</th>
+                            <th>Curtidas</th>
+                            <th>Comentários</th>
+                            <th>Score</th>
+                            <th>Data/Hora</th>
+                            <th>Link</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trendsBodyCollect">
+                        <tr>
+                            <td colspan="9" class="empty-state">
+                                <div class="loading-spinner" style="margin: 0 auto 20px;"></div>
+                                <h3>Carregando tendências...</h3>
+                                <p>Aguarde enquanto buscamos os vídeos mais curtidos do TikTok</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Aba: TikTok Shop -->
@@ -672,6 +700,33 @@
                     🛍️ <strong>Busca TikTok Shop:</strong> O sistema busca vídeos diretamente da página de busca do TikTok por "tiktok shop" e ordena por maiores métricas (likes, comentários, visualizações).
                 </p>
             </div>
+            
+            <!-- Tabela para aba TikTok Shop -->
+            <div style="padding: 20px 40px; overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Vídeo</th>
+                            <th>Autor</th>
+                            <th>Visualizações</th>
+                            <th>Curtidas</th>
+                            <th>Comentários</th>
+                            <th>Score</th>
+                            <th>Data/Hora</th>
+                            <th>Link</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trendsBodyTikTokShop">
+                        <tr>
+                            <td colspan="9" class="empty-state">
+                                <h3>Nenhum vídeo coletado ainda</h3>
+                                <p>Clique em "Coletar TikTok Shop" para buscar vídeos</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Aba: Tendências Coletadas -->
@@ -694,6 +749,33 @@
                 <button class="btn btn-primary" onclick="loadHistory()">
                     🔄 Carregar
                 </button>
+            </div>
+            
+            <!-- Tabela para aba Tendências Coletadas -->
+            <div style="padding: 20px 40px; overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Vídeo</th>
+                            <th>Autor</th>
+                            <th>Visualizações</th>
+                            <th>Curtidas</th>
+                            <th>Comentários</th>
+                            <th>Score</th>
+                            <th>Data/Hora</th>
+                            <th>Link</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trendsBodyHistory">
+                        <tr>
+                            <td colspan="9" class="empty-state">
+                                <h3>Nenhuma tendência carregada</h3>
+                                <p>Selecione uma data e clique em "Carregar"</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -761,29 +843,7 @@
 
         <div class="table-container">
         <table id="trendsTable">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Vídeo</th>
-                    <th>Autor</th>
-                    <th>Visualizações</th>
-                    <th>Curtidas</th>
-                    <th>Comentários</th>
-                    <th>Score</th>
-                    <th>Data/Hora</th>
-                    <th>Link</th>
-                </tr>
-            </thead>
-            <tbody id="trendsBody">
-                    <tr>
-                        <td colspan="8" class="empty-state">
-                            <div class="loading-spinner" style="margin: 0 auto 20px;"></div>
-                            <h3>Carregando tendências...</h3>
-                            <p>Aguarde enquanto buscamos os vídeos mais curtidos do TikTok</p>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+            </div>
         </div>
     </div>
 
@@ -997,7 +1057,7 @@
             const progressMessage = document.getElementById('progressMessage');
             const progressPercent = document.getElementById('progressPercent');
             const tiktokShopSpinner = document.getElementById('tiktokShopSpinner');
-            const tbody = document.getElementById('trendsBody');
+            const tbody = document.getElementById('trendsBodyTikTokShop');
             
             // Mostrar status
             statusEl.style.display = 'block';
@@ -1074,7 +1134,7 @@
 
                 const trends = result.data || [];
                 allTrends = trends;
-                displayTrends(trends);
+                displayTrends(trends, document.getElementById('trendsBodyCollect'));
                 
                 // Atualizar link CSV
                 updateTikTokShopCSVLink(limit);
@@ -1130,7 +1190,7 @@
             const progressFill = document.getElementById('progressFill');
             const progressMessage = document.getElementById('progressMessage');
             const progressPercent = document.getElementById('progressPercent');
-            const tbody = document.getElementById('trendsBody');
+            const tbody = document.getElementById('trendsBodyCollect');
             
             // Mostrar aviso sobre login manual
             statusEl.style.display = 'block';
@@ -1524,8 +1584,25 @@
             });
         }
 
-        function displayTrends(trends) {
-            const tbody = document.getElementById('trendsBody');
+        // Função para determinar qual tbody usar baseado na aba ativa
+        function getCurrentTbody() {
+            const activeTab = document.querySelector('.tab-btn.active');
+            if (activeTab && activeTab.id === 'tabTikTokShop') {
+                return document.getElementById('trendsBodyTikTokShop');
+            } else if (activeTab && activeTab.id === 'tabHistory') {
+                return document.getElementById('trendsBodyHistory');
+            } else {
+                return document.getElementById('trendsBodyCollect');
+            }
+        }
+
+        function displayTrends(trends, targetTbody = null) {
+            const tbody = targetTbody || getCurrentTbody();
+            
+            if (!tbody) {
+                console.error('[Panel] Tbody não encontrado!');
+                return;
+            }
 
             if (trends.length === 0) {
                 tbody.innerHTML = `
@@ -1705,7 +1782,7 @@
 
         // Carregar histórico de tendências coletadas
         async function loadHistory() {
-            const tbody = document.getElementById('trendsBody');
+            const tbody = document.getElementById('trendsBodyHistory');
             const statusEl = document.getElementById('status');
             const statusText = document.getElementById('statusText');
             
@@ -1740,7 +1817,7 @@
                 }
 
                 const trends = result.data || [];
-                displayTrends(trends);
+                displayTrends(trends, document.getElementById('trendsBodyHistory'));
                 
                 statusEl.className = 'status success';
                 statusText.textContent = `✅ ${trends.length} tendências carregadas do histórico`;

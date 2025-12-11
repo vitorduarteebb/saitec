@@ -3302,14 +3302,12 @@ async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
       }
     }
 
-    // Filtrar por métricas mínimas (MIN_LIKES)
-    const filteredVideos = uniqueVideos.filter(video => {
+    // Filtrar por métricas mínimas (MIN_LIKES) - mas com fallback progressivo
+    let filteredVideos = uniqueVideos.filter(video => {
       const likes = video.likes || 0;
-      const views = video.views || 0;
       
       // Aplicar filtro mínimo de curtidas
       if (likes < MIN_LIKES) {
-        logger.debug(`[TikTok Shop Search] Vídeo descartado: likes=${likes} < MIN_LIKES=${MIN_LIKES}`);
         return false;
       }
       
@@ -3317,6 +3315,35 @@ async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
     });
     
     logger.info(`[TikTok Shop Search] Após filtro MIN_LIKES=${MIN_LIKES}: ${filteredVideos.length} vídeos (de ${uniqueVideos.length} encontrados)`);
+    
+    // Se não temos vídeos suficientes após o filtro, relaxar progressivamente
+    if (filteredVideos.length < limit && uniqueVideos.length > 0) {
+      logger.warn(`[TikTok Shop Search] Apenas ${filteredVideos.length} vídeos após filtro MIN_LIKES=${MIN_LIKES}. Relaxando filtro...`);
+      
+      // 1º fallback: 50% do MIN_LIKES
+      const relaxedMinLikes = Math.floor(MIN_LIKES * 0.5);
+      filteredVideos = uniqueVideos.filter(video => (video.likes || 0) >= relaxedMinLikes);
+      logger.info(`[TikTok Shop Search] Após filtro relaxado (${relaxedMinLikes} likes): ${filteredVideos.length} vídeos`);
+      
+      // 2º fallback: 10% do MIN_LIKES (mínimo 1000)
+      if (filteredVideos.length < limit) {
+        const veryRelaxedMinLikes = Math.max(1000, Math.floor(MIN_LIKES * 0.1));
+        filteredVideos = uniqueVideos.filter(video => (video.likes || 0) >= veryRelaxedMinLikes);
+        logger.info(`[TikTok Shop Search] Após filtro muito relaxado (${veryRelaxedMinLikes} likes): ${filteredVideos.length} vídeos`);
+      }
+      
+      // 3º fallback: qualquer vídeo com likes > 0
+      if (filteredVideos.length < limit) {
+        filteredVideos = uniqueVideos.filter(video => (video.likes || 0) > 0);
+        logger.info(`[TikTok Shop Search] Após filtro mínimo (likes > 0): ${filteredVideos.length} vídeos`);
+      }
+      
+      // Último fallback: todos os vídeos
+      if (filteredVideos.length === 0 && uniqueVideos.length > 0) {
+        logger.warn(`[TikTok Shop Search] Nenhum vídeo passou nos filtros. Retornando todos os ${uniqueVideos.length} vídeos encontrados.`);
+        filteredVideos = uniqueVideos;
+      }
+    }
     
     // Ordenar por likes (métricas) e limitar
     filteredVideos.sort((a, b) => {
