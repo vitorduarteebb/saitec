@@ -1514,11 +1514,13 @@ app.get('/trends/latest', apiLimiter, async (req, res) => {
         score: engagementScore,
         engagementScore: engagementScore,
         url: trend.video_url,
-      thumbnail: trend.thumb_url,
-      author: trend.author_handle,
-      language: trend.language,
-      collectedAt: trend.collected_at
-    }));
+        thumbnail: trend.thumb_url,
+        author: trend.author_handle,
+        language: trend.language,
+        country: trend.country,
+        collectedAt: trend.collected_at
+      };
+    });
 
     res.json({
       success: true,
