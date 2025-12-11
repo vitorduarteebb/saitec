@@ -2404,7 +2404,7 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
     try {
       trendsFromJSON = await extractFromJson(page, niche, country);
       logger.info(`[TikTok CC] Extraídos ${trendsFromJSON.length} vídeos brutos do JSON (COM MÉTRICAS REAIS)`);
-        } catch (error) {
+    } catch (error) {
       logger.warn(`[TikTok CC] Erro ao extrair do JSON: ${error.message}`);
       trendsFromJSON = [];
     }
