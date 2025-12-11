@@ -429,11 +429,22 @@ app.post('/trends/top20', apiLimiter, async (req, res) => {
       logger.error('[API] Erro ao salvar tendências no banco:', saveError);
     }
 
-    // Liberar lock após 2 segundos
+    // Finalizar progresso antes de liberar lock
+    activeCollectionProgress = {
+      status: 'completed',
+      progress: 100,
+      message: `Coleta concluída! ${formattedTrends.length} tendências encontradas`,
+      step: 'concluido',
+      trendsCount: formattedTrends.length,
+      endTime: new Date().toISOString()
+    };
+
+    // Liberar lock após 2 segundos (dar tempo para SSE enviar atualização final)
     setTimeout(() => {
       isCollectionInProgress = false;
       activeCollectionPromise = null;
       activeCollectionProgress = null;
+      logger.info('[API] Lock de coleta liberado');
     }, 2000);
 
     res.json({
@@ -472,17 +483,39 @@ app.post('/trends/top20', apiLimiter, async (req, res) => {
  */
 app.get('/trends/top20', apiLimiter, async (req, res) => {
   try {
-    // Verificar se já há uma coleta em andamento
+    // Verificar se já há uma coleta REALMENTE em andamento
+    // Se a coleta está marcada como "completed" ou "error", permitir nova coleta
     if (isCollectionInProgress && activeCollectionProgress) {
-      logger.info('[API] Coleta já em andamento, retornando status de progresso');
-      return res.json({
-        success: true,
-        inProgress: true,
-        progress: activeCollectionProgress.progress || 0,
-        message: activeCollectionProgress.message || 'Coleta em andamento...',
-        status: activeCollectionProgress.status || 'collecting',
-        redirectToProgress: true
-      });
+      const status = activeCollectionProgress.status;
+      const startTime = activeCollectionProgress.startTime ? new Date(activeCollectionProgress.startTime) : null;
+      const now = new Date();
+      
+      // Se a coleta foi completada ou teve erro, liberar lock
+      if (status === 'completed' || status === 'error') {
+        logger.info('[API] Coleta anterior finalizada, liberando lock e iniciando nova coleta');
+        isCollectionInProgress = false;
+        activeCollectionPromise = null;
+        activeCollectionProgress = null;
+      }
+      // Se a coleta está em andamento há mais de 15 minutos, considerar travada e liberar
+      else if (startTime && (now - startTime) > 15 * 60 * 1000) {
+        logger.warn('[API] Coleta travada há mais de 15 minutos, liberando lock');
+        isCollectionInProgress = false;
+        activeCollectionPromise = null;
+        activeCollectionProgress = null;
+      }
+      // Se realmente está em andamento, retornar status
+      else {
+        logger.info('[API] Coleta já em andamento, retornando status de progresso');
+        return res.json({
+          success: true,
+          inProgress: true,
+          progress: activeCollectionProgress.progress || 0,
+          message: activeCollectionProgress.message || 'Coleta em andamento...',
+          status: activeCollectionProgress.status || 'collecting',
+          redirectToProgress: true
+        });
+      }
     }
 
     // Validar parâmetros básicos
@@ -608,11 +641,22 @@ app.get('/trends/top20', apiLimiter, async (req, res) => {
       trendsCount: trends.length
     };
 
-    // Liberar lock após 2 segundos
+    // Finalizar progresso antes de liberar lock
+    activeCollectionProgress = {
+      status: 'completed',
+      progress: 100,
+      message: `Coleta concluída! ${formattedTrends.length} tendências encontradas`,
+      step: 'concluido',
+      trendsCount: formattedTrends.length,
+      endTime: new Date().toISOString()
+    };
+
+    // Liberar lock após 2 segundos (dar tempo para SSE enviar atualização final)
     setTimeout(() => {
       isCollectionInProgress = false;
       activeCollectionPromise = null;
       activeCollectionProgress = null;
+      logger.info('[API] Lock de coleta liberado');
     }, 2000);
 
     res.json({
