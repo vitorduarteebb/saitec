@@ -1242,34 +1242,121 @@
             };
         }
 
-        // Função para aguardar conclusão da coleta
+        // Função para aguardar conclusão da coleta usando SSE
         async function waitForCollectionComplete() {
             return new Promise((resolve) => {
-                const checkInterval = setInterval(async () => {
-                    try {
-                        const limit = document.getElementById('filterLimit')?.value || '20';
-                        const country = 'BR';
-                        const url = `/trends/top20?country=${country}&limit=${limit}`;
-                        
-                        const response = await fetch(url);
-                        const result = await response.json();
-                        
-                        if (!result.inProgress) {
-                            clearInterval(checkInterval);
+                // Usar SSE para detectar quando a coleta terminar
+                let completed = false;
+                
+                // Se já temos uma conexão SSE, usar ela
+                if (progressEventSource) {
+                    const originalOnMessage = progressEventSource.onmessage;
+                    
+                    progressEventSource.onmessage = function(event) {
+                        try {
+                            const data = JSON.parse(event.data);
+                            
+                            // Chamar handler original
+                            if (originalOnMessage) {
+                                originalOnMessage.call(progressEventSource, event);
+                            }
+                            
+                            // Se completou ou erro, resolver
+                            if (data.status === 'completed' || data.status === 'error') {
+                                if (!completed) {
+                                    completed = true;
+                                    setTimeout(() => resolve(), 1000); // Aguardar 1s para garantir que dados foram salvos
+                                }
+                            }
+                        } catch (e) {
+                            console.error('[Panel] Erro ao processar evento SSE:', e);
+                        }
+                    };
+                    
+                    // Timeout de segurança (10 minutos)
+                    setTimeout(() => {
+                        if (!completed) {
+                            completed = true;
                             resolve();
                         }
-                    } catch (error) {
-                        console.error('[Panel] Erro ao verificar status:', error);
-                        clearInterval(checkInterval);
-                        resolve(); // Resolver mesmo com erro para não travar
-                    }
-                }, 2000); // Verificar a cada 2 segundos
-                
-                // Timeout de segurança (10 minutos)
-                setTimeout(() => {
-                    clearInterval(checkInterval);
-                    resolve();
-                }, 600000);
+                    }, 600000);
+                } else {
+                    // Fallback: polling menos frequente se SSE não estiver disponível
+                    let attempts = 0;
+                    const maxAttempts = 60; // Máximo 60 tentativas (10 minutos com intervalo de 10s)
+                    
+                    const checkInterval = setInterval(async () => {
+                        attempts++;
+                        
+                        try {
+                            const limit = document.getElementById('filterLimit')?.value || '20';
+                            const country = 'BR';
+                            const url = `/trends/top20?country=${country}&limit=${limit}`;
+                            
+                            const response = await fetch(url);
+                            
+                            // Se receber 429, aguardar mais tempo antes de tentar novamente
+                            if (response.status === 429) {
+                                console.log('[Panel] Rate limit atingido, aguardando mais tempo...');
+                                clearInterval(checkInterval);
+                                
+                                // Aguardar 30 segundos antes de tentar novamente
+                                setTimeout(() => {
+                                    if (!completed && attempts < maxAttempts) {
+                                        checkInterval = setInterval(arguments.callee, 10000);
+                                    } else {
+                                        resolve();
+                                    }
+                                }, 30000);
+                                return;
+                            }
+                            
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}`);
+                            }
+                            
+                            const result = await response.json();
+                            
+                            if (!result.inProgress) {
+                                clearInterval(checkInterval);
+                                completed = true;
+                                resolve();
+                            }
+                        } catch (error) {
+                            console.error('[Panel] Erro ao verificar status:', error);
+                            
+                            // Se for erro de rate limit, aguardar mais
+                            if (error.message.includes('429') || error.message.includes('Muitas requisições')) {
+                                clearInterval(checkInterval);
+                                setTimeout(() => {
+                                    if (!completed && attempts < maxAttempts) {
+                                        checkInterval = setInterval(arguments.callee, 15000);
+                                    } else {
+                                        completed = true;
+                                        resolve();
+                                    }
+                                }, 30000);
+                                return;
+                            }
+                            
+                            // Se exceder tentativas, resolver
+                            if (attempts >= maxAttempts) {
+                                clearInterval(checkInterval);
+                                completed = true;
+                                resolve();
+                            }
+                        }
+                    }, 10000); // Verificar a cada 10 segundos (menos frequente)
+                    
+                    // Timeout de segurança (10 minutos)
+                    setTimeout(() => {
+                        if (!completed) {
+                            clearInterval(checkInterval);
+                            completed = true;
+                            resolve();
+                        }
+                    }, 600000);
+                }
             });
         }
 
