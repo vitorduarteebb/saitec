@@ -68,6 +68,30 @@ async function testConnection() {
  * @param {Object} trend - Objeto de tendência
  * @returns {Promise<Object>} Resultado da inserção
  */
+/**
+ * Converte data ISO8601 para formato MySQL DATETIME
+ * @param {string|Date} date - Data em formato ISO8601 ou Date object
+ * @returns {string} Data no formato MySQL DATETIME (YYYY-MM-DD HH:MM:SS)
+ */
+function formatDateForMySQL(date) {
+  if (!date) {
+    return new Date().toISOString().slice(0, 19).replace('T', ' ');
+  }
+  
+  if (date instanceof Date) {
+    return date.toISOString().slice(0, 19).replace('T', ' ');
+  }
+  
+  // Se for string ISO8601, converter para Date primeiro
+  const dateObj = new Date(date);
+  if (isNaN(dateObj.getTime())) {
+    // Se não conseguir parsear, usar data atual
+    return new Date().toISOString().slice(0, 19).replace('T', ' ');
+  }
+  
+  return dateObj.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 async function insertTrend(trend) {
   const connection = await getPool().getConnection();
   
@@ -89,14 +113,14 @@ async function insertTrend(trend) {
       trend.thumbUrl,
       trend.soundName,
       trend.authorHandle,
-      trend.views,
-      trend.likes,
-      trend.comments,
-      trend.shares,
-      trend.engagementScore,
+      trend.views || 0,
+      trend.likes || 0,
+      trend.comments || 0,
+      trend.shares || 0,
+      trend.engagementScore || trend.score || 0,
       trend.country,
-      trend.language,
-      trend.collectedAt
+      trend.language || 'pt',
+      formatDateForMySQL(trend.collectedAt)
     ];
 
     const [result] = await connection.execute(query, values);
@@ -174,14 +198,14 @@ async function insertTrends(trends) {
           trend.thumbUrl,
           trend.soundName,
           trend.authorHandle,
-          trend.views,
-          trend.likes,
-          trend.comments,
-          trend.shares,
+          trend.views || 0,
+          trend.likes || 0,
+          trend.comments || 0,
+          trend.shares || 0,
           trend.engagementScore || trend.score || 0,
           trend.country,
-          trend.language,
-          trend.collectedAt
+          trend.language || 'pt',
+          formatDateForMySQL(trend.collectedAt)
         ];
 
         await connection.execute(insertQuery, values);
