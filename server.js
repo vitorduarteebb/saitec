@@ -477,16 +477,26 @@ app.post('/trends/top20', apiLimiter, async (req, res) => {
     });
   } catch (error) {
     logger.error('[API] Erro ao buscar Top 20:', error);
+    logger.error('[API] Stack trace:', error.stack);
     
-    // Liberar lock em caso de erro
+    // Liberar lock imediatamente em caso de erro
     isCollectionInProgress = false;
     activeCollectionPromise = null;
     activeCollectionProgress = {
       status: 'error',
       progress: 0,
       message: `Erro: ${error.message}`,
-      step: 'erro'
+      step: 'erro',
+      endTime: new Date().toISOString()
     };
+
+    // Liberar lock após 1 segundo para garantir que SSE recebeu a atualização
+    setTimeout(() => {
+      isCollectionInProgress = false;
+      activeCollectionPromise = null;
+      activeCollectionProgress = null;
+      logger.info('[API] Lock de coleta liberado após erro');
+    }, 1000);
 
     if (!res.headersSent) {
       res.status(500).json({
