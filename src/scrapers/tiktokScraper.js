@@ -2566,94 +2566,93 @@ async function scrapeTikTokCreativeCenter({ niche = 'genérico', country = 'BR' 
       
       // Se ainda não temos 20, fazer mais scrolls AGRESSIVOS e aguardar mais batches
       if (finalTrends.length < 20) {
-          logger.info(`[TikTok CC] Ainda temos apenas ${finalTrends.length} vídeos. Fazendo scrolls AGRESSIVOS para interceptar mais batches...`);
+        logger.info(`[TikTok CC] Ainda temos apenas ${finalTrends.length} vídeos. Fazendo scrolls AGRESSIVOS para interceptar mais batches...`);
+        
+        const initialApiCount = apiResponses.length;
+        const initialVideoCount = finalTrends.length;
+        
+        // Fazer scrolls mais agressivos e aguardar mais tempo
+        for (let i = 0; i < 15; i++) { // Aumentado de 10 para 15
+          await page.evaluate(() => {
+            window.scrollBy(0, 3000); // Scroll maior (3000px)
+          });
+          await randomDelay(4000, 6000); // Aguardar mais tempo entre scrolls
           
-          const initialApiCount = apiResponses.length;
-          const initialVideoCount = finalTrends.length;
-          
-          // Fazer scrolls mais agressivos e aguardar mais tempo
-          for (let i = 0; i < 15; i++) { // Aumentado de 10 para 15
+          // A cada 3 scrolls, fazer scroll até o final da página
+          if (i % 3 === 0) {
             await page.evaluate(() => {
-              window.scrollBy(0, 3000); // Scroll maior (3000px)
+              window.scrollTo(0, document.body.scrollHeight);
             });
-            await randomDelay(4000, 6000); // Aguardar mais tempo entre scrolls
-            
-            // A cada 3 scrolls, fazer scroll até o final da página
-            if (i % 3 === 0) {
-              await page.evaluate(() => {
-                window.scrollTo(0, document.body.scrollHeight);
-              });
-              await randomDelay(5000, 7000); // Aguardar mais após scroll até o final
-            }
-            
-            // Verificar se novos batches foram interceptados
-            if (apiResponses.length > initialApiCount) {
-              logger.info(`[TikTok CC] ✅ Interceptados ${apiResponses.length - initialApiCount} novos batches após ${i+1} scrolls!`);
-              break; // Parar se já interceptamos novos batches
-            }
+            await randomDelay(5000, 7000); // Aguardar mais após scroll até o final
           }
           
-          // Aguardar mais um pouco para garantir interceptação completa
-          await randomDelay(10000, 15000);
-          
-          // Processar TODOS os novos batches interceptados
+          // Verificar se novos batches foram interceptados
           if (apiResponses.length > initialApiCount) {
-            logger.info(`[TikTok CC] ✅ Processando ${apiResponses.length - initialApiCount} novos batches interceptados...`);
-            const newApiVideos = [];
-            for (let i = initialApiCount; i < apiResponses.length; i++) {
-              try {
-                const apiVideos = extractFromApiResponse(apiResponses[i].data, niche, country);
-                newApiVideos.push(...apiVideos);
-              } catch (error) {
-                logger.warn(`[TikTok CC] Erro ao processar resposta adicional da API: ${error.message}`);
-              }
-            }
-            
-            if (newApiVideos.length > 0) {
-              // Ordenar por métricas
-              const sortedNewVideos = newApiVideos.sort((a, b) => {
-                const scoreA = (a.likes || a.metrics?.likes || 0) * 2 + 
-                               (a.views || a.metrics?.views || 0) + 
-                               (a.comments || a.metrics?.comments || 0) * 3 + 
-                               (a.shares || a.metrics?.shares || 0) * 5;
-                const scoreB = (b.likes || b.metrics?.likes || 0) * 2 + 
-                               (b.views || b.metrics?.views || 0) + 
-                               (b.comments || b.metrics?.comments || 0) * 3 + 
-                               (b.shares || b.metrics?.shares || 0) * 5;
-                return scoreB - scoreA;
-              });
-              
-              // Filtrar por TikTok Shop
-              const newApiFiltered = sortedNewVideos.filter(video => {
-                const text = `${video.title || ''} ${video.description || ''} ${video.mainHashtag || ''}`.toLowerCase();
-                return text.includes('tiktok shop') || 
-                       text.includes('tiktokshop') || 
-                       text.includes('shop');
-              });
-              
-              const existingIds2 = new Set(finalTrends.map(t => t.id).filter(Boolean));
-              const newVideos2 = newApiFiltered.filter(t => {
-                if (t.id && !existingIds2.has(t.id)) {
-                  existingIds2.add(t.id);
-                  return true;
-                } else if (!t.id) {
-                  // Se não tem ID, verificar por título para evitar duplicatas
-                  const isDuplicate = finalTrends.some(existing => 
-                    existing.title === t.title && existing.authorHandle === t.authorHandle
-                  );
-                  return !isDuplicate;
-                }
-                return false;
-              });
-              
-              finalTrends = finalTrends.concat(newVideos2);
-              logger.info(`[TikTok CC] ✅ Adicionados mais ${newVideos2.length} vídeos após scrolls adicionais (total: ${finalTrends.length}, adicionados ${finalTrends.length - initialVideoCount} novos)`);
-            } else {
-              logger.warn(`[TikTok CC] ⚠️ Nenhum novo vídeo encontrado nos batches interceptados após scrolls adicionais`);
-            }
-          } else {
-            logger.warn(`[TikTok CC] ⚠️ Nenhum novo batch interceptado após scrolls adicionais. Total: ${apiResponses.length} batches`);
+            logger.info(`[TikTok CC] ✅ Interceptados ${apiResponses.length - initialApiCount} novos batches após ${i+1} scrolls!`);
+            break; // Parar se já interceptamos novos batches
           }
+        }
+        
+        // Aguardar mais um pouco para garantir interceptação completa
+        await randomDelay(10000, 15000);
+        
+        // Processar TODOS os novos batches interceptados
+        if (apiResponses.length > initialApiCount) {
+          logger.info(`[TikTok CC] ✅ Processando ${apiResponses.length - initialApiCount} novos batches interceptados...`);
+          const newApiVideos = [];
+          for (let i = initialApiCount; i < apiResponses.length; i++) {
+            try {
+              const apiVideos = extractFromApiResponse(apiResponses[i].data, niche, country);
+              newApiVideos.push(...apiVideos);
+            } catch (error) {
+              logger.warn(`[TikTok CC] Erro ao processar resposta adicional da API: ${error.message}`);
+            }
+          }
+          
+          if (newApiVideos.length > 0) {
+            // Ordenar por métricas
+            const sortedNewVideos = newApiVideos.sort((a, b) => {
+              const scoreA = (a.likes || a.metrics?.likes || 0) * 2 + 
+                             (a.views || a.metrics?.views || 0) + 
+                             (a.comments || a.metrics?.comments || 0) * 3 + 
+                             (a.shares || a.metrics?.shares || 0) * 5;
+              const scoreB = (b.likes || b.metrics?.likes || 0) * 2 + 
+                             (b.views || b.metrics?.views || 0) + 
+                             (b.comments || b.metrics?.comments || 0) * 3 + 
+                             (b.shares || b.metrics?.shares || 0) * 5;
+              return scoreB - scoreA;
+            });
+            
+            // Filtrar por TikTok Shop
+            const newApiFiltered = sortedNewVideos.filter(video => {
+              const text = `${video.title || ''} ${video.description || ''} ${video.mainHashtag || ''}`.toLowerCase();
+              return text.includes('tiktok shop') || 
+                     text.includes('tiktokshop') || 
+                     text.includes('shop');
+            });
+            
+            const existingIds2 = new Set(finalTrends.map(t => t.id).filter(Boolean));
+            const newVideos2 = newApiFiltered.filter(t => {
+              if (t.id && !existingIds2.has(t.id)) {
+                existingIds2.add(t.id);
+                return true;
+              } else if (!t.id) {
+                // Se não tem ID, verificar por título para evitar duplicatas
+                const isDuplicate = finalTrends.some(existing => 
+                  existing.title === t.title && existing.authorHandle === t.authorHandle
+                );
+                return !isDuplicate;
+              }
+              return false;
+            });
+            
+            finalTrends = finalTrends.concat(newVideos2);
+            logger.info(`[TikTok CC] ✅ Adicionados mais ${newVideos2.length} vídeos após scrolls adicionais (total: ${finalTrends.length}, adicionados ${finalTrends.length - initialVideoCount} novos)`);
+          } else {
+            logger.warn(`[TikTok CC] ⚠️ Nenhum novo vídeo encontrado nos batches interceptados após scrolls adicionais`);
+          }
+        } else {
+          logger.warn(`[TikTok CC] ⚠️ Nenhum novo batch interceptado após scrolls adicionais. Total: ${apiResponses.length} batches`);
         }
       }
     }
