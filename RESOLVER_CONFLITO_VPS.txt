@@ -1,0 +1,60 @@
+# Resolver Conflito de Merge na VPS
+
+## Problema
+O git pull está falhando porque há mudanças locais em:
+- public/panel.html
+- server.js
+
+## Solução: Fazer Stash das Mudanças Locais
+
+Execute os seguintes comandos na VPS:
+
+```bash
+cd /root/saitec-automation
+
+# Fazer backup das mudanças locais (stash)
+git stash
+
+# Agora fazer pull
+git pull origin main
+
+# Se quiser recuperar as mudanças locais depois (opcional):
+# git stash pop
+
+# Reiniciar PM2 com as novas variáveis de ambiente
+pm2 restart saitec-automation --update-env
+
+# Verificar logs
+pm2 logs saitec-automation --lines 50
+```
+
+## Alternativa: Descartar Mudanças Locais (se não forem importantes)
+
+```bash
+cd /root/saitec-automation
+
+# Descartar mudanças locais
+git reset --hard HEAD
+
+# Fazer pull
+git pull origin main
+
+# Reiniciar PM2
+pm2 restart saitec-automation --update-env
+
+# Verificar logs
+pm2 logs saitec-automation --lines 50
+```
+
+## Correções Aplicadas
+
+1. ✅ Erro `useForYou is not defined` - Corrigido definindo `useForYou = true` no início da função
+2. ✅ Erro SQL `LIMIT ?` - Corrigido usando interpolação direta em vez de parâmetros preparados
+
+## Verificar se Funcionou
+
+Após atualizar, verifique os logs:
+- Não deve mais aparecer "useForYou is not defined"
+- Não deve mais aparecer "Incorrect arguments to mysqld_stmt_execute"
+- Os vídeos devem ser coletados e retornados corretamente
+
