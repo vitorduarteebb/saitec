@@ -3122,40 +3122,110 @@ async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
     // Extrair vídeos do DOM como fallback
     const domVideos = await page.evaluate(() => {
       const videos = [];
-      const videoElements = document.querySelectorAll('[data-e2e="search-result-item"], [class*="video-item"], [class*="DivItemContainer"]');
+      
+      // Múltiplos seletores para encontrar vídeos na página de busca
+      const selectors = [
+        '[data-e2e="search-result-item"]',
+        '[class*="DivItemContainer"]',
+        '[class*="video-item"]',
+        'div[class*="ItemContainer"]',
+        'div[class*="VideoItem"]'
+      ];
+      
+      let videoElements = [];
+      for (const selector of selectors) {
+        const elements = document.querySelectorAll(selector);
+        if (elements.length > 0) {
+          videoElements = Array.from(elements);
+          break;
+        }
+      }
       
       videoElements.forEach((el, index) => {
         try {
-          const link = el.querySelector('a[href*="/video/"]');
+          // Buscar link do vídeo
+          const link = el.querySelector('a[href*="/video/"]') || el.closest('a[href*="/video/"]');
           const href = link?.href || '';
           const videoIdMatch = href.match(/\/video\/(\d+)/);
           const videoId = videoIdMatch ? videoIdMatch[1] : null;
           
-          if (videoId) {
-            const titleEl = el.querySelector('[data-e2e="search-result-desc"], [class*="desc"], [class*="title"]');
-            const title = titleEl?.textContent?.trim() || '';
-            
-            const authorEl = el.querySelector('[data-e2e="search-result-user-link"], [class*="author"], [class*="username"]');
-            const author = authorEl?.textContent?.trim() || '';
-            
-            const statsEl = el.querySelector('[data-e2e="search-result-like"], [class*="stats"], [class*="metrics"]');
-            const likesText = statsEl?.textContent?.trim() || '0';
-            const likes = parseInt(likesText.replace(/[^\d]/g, '')) || 0;
-            
-            videos.push({
-              id: videoId,
-              title: title || `Vídeo ${index + 1}`,
-              url: href,
-              videoUrl: href,
-              author: author,
-              likes: likes,
-              views: 0,
-              comments: 0,
-              shares: 0
-            });
+          if (!videoId) return;
+          
+          // Buscar título/descrição
+          const titleSelectors = [
+            '[data-e2e="search-result-desc"]',
+            '[class*="desc"]',
+            '[class*="title"]',
+            '[class*="Description"]',
+            'span[class*="SpanText"]'
+          ];
+          
+          let title = '';
+          for (const sel of titleSelectors) {
+            const titleEl = el.querySelector(sel);
+            if (titleEl) {
+              title = titleEl.textContent?.trim() || '';
+              if (title) break;
+            }
           }
+          
+          // Buscar autor
+          const authorSelectors = [
+            '[data-e2e="search-result-user-link"]',
+            '[class*="author"]',
+            '[class*="username"]',
+            'a[href*="/@"]'
+          ];
+          
+          let author = '';
+          for (const sel of authorSelectors) {
+            const authorEl = el.querySelector(sel);
+            if (authorEl) {
+              author = authorEl.textContent?.trim() || authorEl.getAttribute('href')?.match(/@([^/]+)/)?.[1] || '';
+              if (author) break;
+            }
+          }
+          
+          // Buscar métricas (likes)
+          const statsSelectors = [
+            '[data-e2e="search-result-like"]',
+            '[class*="stats"]',
+            '[class*="metrics"]',
+            '[class*="LikeCount"]',
+            'strong[class*="Count"]'
+          ];
+          
+          let likes = 0;
+          for (const sel of statsSelectors) {
+            const statsEl = el.querySelector(sel);
+            if (statsEl) {
+              const likesText = statsEl.textContent?.trim() || '';
+              // Converter formatos como "1.2M", "50K", "1,234" para número
+              const likesNum = likesText.replace(/[^\d.,KMB]/gi, '');
+              if (likesNum.includes('M')) {
+                likes = Math.floor(parseFloat(likesNum.replace('M', '').replace(',', '.')) * 1000000);
+              } else if (likesNum.includes('K')) {
+                likes = Math.floor(parseFloat(likesNum.replace('K', '').replace(',', '.')) * 1000);
+              } else {
+                likes = parseInt(likesNum.replace(/[^\d]/g, '')) || 0;
+              }
+              if (likes > 0) break;
+            }
+          }
+          
+          videos.push({
+            id: videoId,
+            title: title || `Vídeo TikTok Shop ${index + 1}`,
+            url: href,
+            videoUrl: href,
+            author: author.replace('@', ''),
+            likes: likes,
+            views: 0, // Views geralmente não aparecem na busca
+            comments: 0,
+            shares: 0
+          });
         } catch (err) {
-          // Ignorar erros individuais
+          console.error(`[TikTok Shop Search] Erro ao extrair vídeo ${index + 1}:`, err);
         }
       });
       
@@ -3175,30 +3245,40 @@ async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
         const author = itemInfo?.author || {};
         const stats = video?.stats || itemInfo?.statistics || {};
         
-        const title = video?.desc || video?.description || itemInfo?.desc || '';
-        const authorName = author?.uniqueId || author?.nickname || author?.username || '';
-        const views = stats?.playCount || stats?.viewCount || 0;
-        const likes = stats?.diggCount || stats?.likeCount || 0;
-        const comments = stats?.commentCount || 0;
-        const shares = stats?.shareCount || 0;
+        const title = video?.desc || video?.description || itemInfo?.desc || itemInfo?.text || '';
+        const authorName = author?.uniqueId || author?.nickname || author?.username || author?.nickName || '';
+        const views = parseInt(stats?.playCount || stats?.viewCount || stats?.play_count || 0);
+        const likes = parseInt(stats?.diggCount || stats?.likeCount || stats?.digg_count || stats?.like_count || 0);
+        const comments = parseInt(stats?.commentCount || stats?.comments || stats?.comment_count || 0);
+        const shares = parseInt(stats?.shareCount || stats?.shares || stats?.share_count || 0);
+        
+        // Validar que temos pelo menos um ID de vídeo válido
+        if (!videoId) {
+          logger.debug(`[TikTok Shop Search] Vídeo da API sem ID, pulando...`);
+          continue;
+        }
         
         allVideos.push({
-          id: videoId,
-          title: title || 'Vídeo TikTok Shop',
-          url: `https://www.tiktok.com/@${authorName}/video/${videoId}`,
-          videoUrl: `https://www.tiktok.com/@${authorName}/video/${videoId}`,
-          author: authorName,
-          views: views || 0,
-          likes: likes || 0,
-          comments: comments || 0,
-          shares: shares || 0,
+          id: videoId.toString(),
+          title: title || `Vídeo TikTok Shop ${videoId}`,
+          url: authorName ? `https://www.tiktok.com/@${authorName}/video/${videoId}` : `https://www.tiktok.com/video/${videoId}`,
+          videoUrl: authorName ? `https://www.tiktok.com/@${authorName}/video/${videoId}` : `https://www.tiktok.com/video/${videoId}`,
+          author: authorName || 'unknown',
+          views: views,
+          likes: likes,
+          comments: comments,
+          shares: shares,
           source: 'tiktok_shop_search',
           hashtags: video?.textExtra?.filter(e => e.hashtagName).map(e => `#${e.hashtagName}`) || []
         });
+        
+        logger.debug(`[TikTok Shop Search] Vídeo da API: id=${videoId}, likes=${likes}, views=${views}, title="${title.substring(0, 40)}"`);
       } catch (err) {
         logger.warn(`[TikTok Shop Search] Erro ao processar vídeo da API: ${err.message}`);
       }
     }
+    
+    logger.info(`[TikTok Shop Search] Processados ${allVideos.length} vídeos da API`);
 
     // Adicionar vídeos do DOM que não foram capturados pela API
     for (const domVideo of domVideos) {
@@ -3222,11 +3302,41 @@ async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
       }
     }
 
+    // Filtrar por métricas mínimas (MIN_LIKES)
+    const filteredVideos = uniqueVideos.filter(video => {
+      const likes = video.likes || 0;
+      const views = video.views || 0;
+      
+      // Aplicar filtro mínimo de curtidas
+      if (likes < MIN_LIKES) {
+        logger.debug(`[TikTok Shop Search] Vídeo descartado: likes=${likes} < MIN_LIKES=${MIN_LIKES}`);
+        return false;
+      }
+      
+      return true;
+    });
+    
+    logger.info(`[TikTok Shop Search] Após filtro MIN_LIKES=${MIN_LIKES}: ${filteredVideos.length} vídeos (de ${uniqueVideos.length} encontrados)`);
+    
     // Ordenar por likes (métricas) e limitar
-    uniqueVideos.sort((a, b) => (b.likes || 0) - (a.likes || 0));
-    const finalVideos = uniqueVideos.slice(0, limit);
+    filteredVideos.sort((a, b) => {
+      // Priorizar likes, depois views, depois comments
+      const scoreA = (a.likes || 0) * 1000 + (a.views || 0) * 0.1 + (a.comments || 0) * 10;
+      const scoreB = (b.likes || 0) * 1000 + (b.views || 0) * 0.1 + (b.comments || 0) * 10;
+      return scoreB - scoreA;
+    });
+    
+    const finalVideos = filteredVideos.slice(0, limit);
 
-    logger.info(`[TikTok Shop Search] ✅ Total de ${finalVideos.length} vídeos únicos coletados (de ${uniqueVideos.length} encontrados)`);
+    logger.info(`[TikTok Shop Search] ✅ Total de ${finalVideos.length} vídeos únicos coletados após filtros`);
+    
+    // Log dos primeiros 3 vídeos para debug
+    if (finalVideos.length > 0) {
+      logger.info(`[TikTok Shop Search] 📊 Primeiros 3 vídeos:`);
+      finalVideos.slice(0, 3).forEach((video, index) => {
+        logger.info(`[TikTok Shop Search]   Vídeo ${index + 1}: likes=${video.likes || 0}, views=${video.views || 0}, title="${(video.title || '').substring(0, 50)}"`);
+      });
+    }
 
     return finalVideos;
 
