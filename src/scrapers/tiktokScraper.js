@@ -2985,7 +2985,242 @@ async function scrapeTikTokHashtags({ hashtags = ['#beleza'], country = 'BR' }) 
   }
 }
 
+/**
+ * Busca vídeos da página de busca do TikTok Shop
+ * @param {Object} options - Opções de busca
+ * @param {number} options.limit - Limite de vídeos a coletar (padrão: 20)
+ * @returns {Promise<Array>} Lista de vídeos encontrados
+ */
+async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
+  logger.info(`[TikTok Shop Search] 🛍️ Iniciando busca por "tiktok shop" (limite: ${limit})`);
+  
+  if (scrapingLock) {
+    logger.warn('[TikTok Shop Search] Scraping já em andamento, aguardando...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    if (scrapingLock) {
+      throw new Error('Scraping já em andamento. Aguarde a conclusão.');
+    }
+  }
+
+  scrapingLock = true;
+  let browser = null;
+  let page = null;
+
+  try {
+    // Inicializar navegador
+    browser = await initBrowser();
+    page = await browser.newPage();
+    
+    // Configurar interceptação de requisições da API
+    const apiVideos = new Map();
+    
+    page.on('response', async (response) => {
+      try {
+        const url = response.url();
+        
+        // Interceptar APIs que retornam vídeos
+        if (url.includes('/api/recommend/item_list/') || 
+            url.includes('/api/search/item/') ||
+            url.includes('/api/post/item_list/')) {
+          
+          try {
+            const data = await response.json();
+            
+            // Tentar extrair vídeos da resposta
+            const items = data?.itemList || data?.items || data?.data || [];
+            
+            if (Array.isArray(items) && items.length > 0) {
+              items.forEach(item => {
+                const videoId = item?.itemInfo?.video?.id || item?.id || item?.aweme_id;
+                if (videoId && !apiVideos.has(videoId)) {
+                  apiVideos.set(videoId, item);
+                }
+              });
+              
+              logger.info(`[TikTok Shop Search] [API] Interceptados ${items.length} vídeos de ${url.substring(0, 80)}...`);
+            }
+          } catch (err) {
+            // Ignorar erros de parsing JSON
+          }
+        }
+      } catch (error) {
+        // Ignorar erros de interceptação
+      }
+    });
+
+    // Navegar para a página de busca do TikTok Shop
+    const searchUrl = 'https://www.tiktok.com/search?q=tiktok%20shop';
+    logger.info(`[TikTok Shop Search] Navegando para: ${searchUrl}`);
+    
+    await page.goto(searchUrl, {
+      waitUntil: 'networkidle2',
+      timeout: 60000
+    });
+
+    // Aguardar conteúdo carregar
+    await randomDelay(3000, 5000);
+
+    // Clicar na aba "Vídeos" se não estiver selecionada
+    try {
+      await page.waitForSelector('[data-e2e="search-top-type"]', { timeout: 10000 });
+      const videoTab = await page.$('[data-e2e="search-top-type"]:has-text("Vídeos")');
+      if (videoTab) {
+        await videoTab.click();
+        await randomDelay(2000, 3000);
+      }
+    } catch (err) {
+      logger.warn('[TikTok Shop Search] Não foi possível clicar na aba Vídeos, continuando...');
+    }
+
+    // Fazer scroll para carregar mais vídeos
+    logger.info('[TikTok Shop Search] Fazendo scroll para carregar vídeos...');
+    
+    for (let i = 0; i < 10; i++) {
+      await page.evaluate(() => {
+        window.scrollBy(0, window.innerHeight);
+      });
+      await randomDelay(1000, 2000);
+      
+      if (apiVideos.size >= limit) {
+        logger.info(`[TikTok Shop Search] Coletados ${apiVideos.size} vídeos, suficiente para o limite de ${limit}`);
+        break;
+      }
+    }
+
+    // Aguardar um pouco mais para garantir que todas as requisições foram interceptadas
+    await randomDelay(3000, 5000);
+
+    // Extrair vídeos do DOM como fallback
+    const domVideos = await page.evaluate(() => {
+      const videos = [];
+      const videoElements = document.querySelectorAll('[data-e2e="search-result-item"], [class*="video-item"], [class*="DivItemContainer"]');
+      
+      videoElements.forEach((el, index) => {
+        try {
+          const link = el.querySelector('a[href*="/video/"]');
+          const href = link?.href || '';
+          const videoIdMatch = href.match(/\/video\/(\d+)/);
+          const videoId = videoIdMatch ? videoIdMatch[1] : null;
+          
+          if (videoId) {
+            const titleEl = el.querySelector('[data-e2e="search-result-desc"], [class*="desc"], [class*="title"]');
+            const title = titleEl?.textContent?.trim() || '';
+            
+            const authorEl = el.querySelector('[data-e2e="search-result-user-link"], [class*="author"], [class*="username"]');
+            const author = authorEl?.textContent?.trim() || '';
+            
+            const statsEl = el.querySelector('[data-e2e="search-result-like"], [class*="stats"], [class*="metrics"]');
+            const likesText = statsEl?.textContent?.trim() || '0';
+            const likes = parseInt(likesText.replace(/[^\d]/g, '')) || 0;
+            
+            videos.push({
+              id: videoId,
+              title: title || `Vídeo ${index + 1}`,
+              url: href,
+              videoUrl: href,
+              author: author,
+              likes: likes,
+              views: 0,
+              comments: 0,
+              shares: 0
+            });
+          }
+        } catch (err) {
+          // Ignorar erros individuais
+        }
+      });
+      
+      return videos;
+    });
+
+    logger.info(`[TikTok Shop Search] Extraídos ${domVideos.length} vídeos do DOM`);
+
+    // Combinar vídeos da API e do DOM
+    const allVideos = [];
+    
+    // Processar vídeos interceptados da API
+    for (const [videoId, item] of apiVideos.entries()) {
+      try {
+        const itemInfo = item?.itemInfo || item;
+        const video = itemInfo?.video || {};
+        const author = itemInfo?.author || {};
+        const stats = video?.stats || itemInfo?.statistics || {};
+        
+        const title = video?.desc || video?.description || itemInfo?.desc || '';
+        const authorName = author?.uniqueId || author?.nickname || author?.username || '';
+        const views = stats?.playCount || stats?.viewCount || 0;
+        const likes = stats?.diggCount || stats?.likeCount || 0;
+        const comments = stats?.commentCount || 0;
+        const shares = stats?.shareCount || 0;
+        
+        allVideos.push({
+          id: videoId,
+          title: title || 'Vídeo TikTok Shop',
+          url: `https://www.tiktok.com/@${authorName}/video/${videoId}`,
+          videoUrl: `https://www.tiktok.com/@${authorName}/video/${videoId}`,
+          author: authorName,
+          views: views || 0,
+          likes: likes || 0,
+          comments: comments || 0,
+          shares: shares || 0,
+          source: 'tiktok_shop_search',
+          hashtags: video?.textExtra?.filter(e => e.hashtagName).map(e => `#${e.hashtagName}`) || []
+        });
+      } catch (err) {
+        logger.warn(`[TikTok Shop Search] Erro ao processar vídeo da API: ${err.message}`);
+      }
+    }
+
+    // Adicionar vídeos do DOM que não foram capturados pela API
+    for (const domVideo of domVideos) {
+      const exists = allVideos.find(v => v.id === domVideo.id);
+      if (!exists) {
+        allVideos.push({
+          ...domVideo,
+          source: 'tiktok_shop_search_dom'
+        });
+      }
+    }
+
+    // Remover duplicatas
+    const uniqueVideos = [];
+    const seenIds = new Set();
+    
+    for (const video of allVideos) {
+      if (video.id && !seenIds.has(video.id)) {
+        seenIds.add(video.id);
+        uniqueVideos.push(video);
+      }
+    }
+
+    // Ordenar por likes (métricas) e limitar
+    uniqueVideos.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+    const finalVideos = uniqueVideos.slice(0, limit);
+
+    logger.info(`[TikTok Shop Search] ✅ Total de ${finalVideos.length} vídeos únicos coletados (de ${uniqueVideos.length} encontrados)`);
+
+    return finalVideos;
+
+  } catch (error) {
+    logger.error('[TikTok Shop Search] Erro no scraping:', error);
+    throw error;
+  } finally {
+    scrapingLock = false;
+    
+    if (page) {
+      try {
+        await page.close();
+      } catch (err) {
+        // Ignorar erros ao fechar página
+      }
+    }
+    
+    // Não fechar o browser aqui, pois pode estar sendo usado por outras funções
+  }
+}
+
 module.exports = {
+  scrapeTikTokShopSearch,
   scrapeTikTokCreativeCenter,
   scrapeTikTokHashtags,
   initBrowser,

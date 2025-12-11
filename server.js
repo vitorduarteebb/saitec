@@ -10,7 +10,7 @@ const path = require('path');
 const { getTopTrends, getTikTokShopTopProducts, getKalodataTopProducts } = require('./src/trendsService');
 const { insertTrends, testConnection, getLatestTrends, getCollectionDates, insertProducts, getProducts } = require('./src/database');
 const logger = require('./src/utils/logger');
-const { closeBrowser } = require('./src/scrapers/tiktokScraper');
+const { closeBrowser, scrapeTikTokShopSearch } = require('./src/scrapers/tiktokScraper');
 const { runDailyCollection } = require('./scripts/run-daily-collection');
 const { startScheduler, stopScheduler } = require('./src/scheduler');
 require('dotenv').config();
@@ -1532,6 +1532,125 @@ app.get('/trends/latest', apiLimiter, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Erro ao buscar últimas tendências',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /trends/tiktokshop
+ * Busca vídeos diretamente da página de busca do TikTok Shop
+ */
+app.get('/trends/tiktokshop', apiLimiter, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit || 20, 10);
+    
+    if (limit > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Limite máximo é 100'
+      });
+    }
+
+    logger.info(`[API] Buscando vídeos do TikTok Shop (limite: ${limit})`);
+
+    const videos = await scrapeTikTokShopSearch({ limit });
+
+    // Normalizar vídeos para o formato esperado
+    const normalizedTrends = videos.map((video, index) => ({
+      id: index + 1,
+      title: video.title || 'Vídeo TikTok Shop',
+      mainHashtag: video.hashtags?.[0] || null,
+      origin: video.source || 'tiktok_shop_search',
+      metrics: {
+        views: video.views || 0,
+        likes: video.likes || 0,
+        comments: video.comments || 0,
+        shares: video.shares || 0
+      },
+      score: (video.likes || 0) * 0.4 + (video.views || 0) * 0.00001 + (video.comments || 0) * 0.1,
+      engagementScore: (video.likes || 0) * 0.4 + (video.views || 0) * 0.00001 + (video.comments || 0) * 0.1,
+      url: video.videoUrl || video.url || '',
+      thumbnail: null,
+      author: video.author || null,
+      language: 'pt',
+      country: 'BR',
+      collectedAt: new Date().toISOString()
+    }));
+
+    // Salvar no banco de dados
+    try {
+      const trendsToSave = normalizedTrends.map(trend => ({
+        source: trend.origin,
+        niche: 'tiktok_shop',
+        title: trend.title,
+        description: null,
+        videoUrl: trend.url,
+        thumbUrl: trend.thumbnail,
+        soundName: null,
+        authorHandle: trend.author,
+        views: trend.metrics.views,
+        likes: trend.metrics.likes,
+        comments: trend.metrics.comments,
+        shares: trend.metrics.shares,
+        engagementScore: trend.engagementScore,
+        country: trend.country,
+        language: trend.language,
+        collectedAt: trend.collectedAt
+      }));
+      
+      const saveResult = await insertTrends(trendsToSave);
+      logger.info(`[API] Tendências TikTok Shop salvas no banco: ${saveResult.inserted} inseridas, ${saveResult.skipped} duplicadas`);
+    } catch (saveError) {
+      logger.error('[API] Erro ao salvar tendências TikTok Shop no banco:', saveError);
+      // Não falhar a requisição se o salvamento der erro
+    }
+
+    res.json({
+      success: true,
+      count: normalizedTrends.length,
+      data: normalizedTrends
+    });
+  } catch (error) {
+    logger.error('[API] Erro ao buscar vídeos do TikTok Shop:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar vídeos do TikTok Shop',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /trends/tiktokshop.csv
+ * Download CSV dos vídeos do TikTok Shop
+ */
+app.get('/trends/tiktokshop.csv', apiLimiter, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit || 20, 10);
+    
+    const videos = await scrapeTikTokShopSearch({ limit });
+    
+    // Criar CSV
+    const csvHeader = 'Rank,Título,Autor,Visualizações,Curtidas,Comentários,Compartilhamentos,Score,URL\n';
+    const csvRows = videos.map((video, index) => {
+      const title = (video.title || '').replace(/"/g, '""');
+      const author = (video.author || '').replace(/"/g, '""');
+      const score = ((video.likes || 0) * 0.4 + (video.views || 0) * 0.00001 + (video.comments || 0) * 0.1).toFixed(2);
+      
+      return `${index + 1},"${title}","${author}",${video.views || 0},${video.likes || 0},${video.comments || 0},${video.shares || 0},${score},"${video.videoUrl || video.url || ''}"`;
+    }).join('\n');
+    
+    const csv = csvHeader + csvRows;
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="tiktok_shop_${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send('\ufeff' + csv); // BOM para Excel
+  } catch (error) {
+    logger.error('[API] Erro ao gerar CSV do TikTok Shop:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao gerar CSV',
       message: error.message
     });
   }
