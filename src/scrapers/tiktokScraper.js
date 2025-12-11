@@ -3041,33 +3041,46 @@ async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
       try {
         const url = response.url();
         
-        // Interceptar APIs que retornam vídeos
+        // Interceptar APIs que retornam vídeos (incluindo APIs de busca)
         if (url.includes('/api/recommend/item_list/') || 
             url.includes('/api/search/item/') ||
-            url.includes('/api/post/item_list/')) {
+            url.includes('/api/post/item_list/') ||
+            url.includes('/api/search/') ||
+            url.includes('search/item')) {
           
           try {
+            const contentType = response.headers()['content-type'] || '';
+            if (!contentType.includes('application/json')) {
+              return; // Ignorar respostas não-JSON
+            }
+            
             const data = await response.json();
             
             // Tentar extrair vídeos da resposta
-            const items = data?.itemList || data?.items || data?.data || [];
+            const items = data?.itemList || data?.items || data?.data || data?.data?.itemList || [];
             
             if (Array.isArray(items) && items.length > 0) {
+              let newVideos = 0;
               items.forEach(item => {
-                const videoId = item?.itemInfo?.video?.id || item?.id || item?.aweme_id;
+                const videoId = item?.itemInfo?.video?.id || item?.id || item?.aweme_id || item?.video?.id;
                 if (videoId && !apiVideos.has(videoId)) {
                   apiVideos.set(videoId, item);
+                  newVideos++;
                 }
               });
               
-              logger.info(`[TikTok Shop Search] [API] Interceptados ${items.length} vídeos de ${url.substring(0, 80)}...`);
+              if (newVideos > 0) {
+                logger.info(`[TikTok Shop Search] [API] Interceptados ${newVideos} novos vídeos (total: ${apiVideos.size}) de ${url.substring(0, 80)}...`);
+              }
             }
           } catch (err) {
-            // Ignorar erros de parsing JSON
+            // Ignorar erros de parsing JSON silenciosamente
+            logger.debug(`[TikTok Shop Search] Erro ao parsear resposta da API ${url.substring(0, 50)}: ${err.message}`);
           }
         }
       } catch (error) {
-        // Ignorar erros de interceptação
+        // Ignorar erros de interceptação silenciosamente
+        logger.debug(`[TikTok Shop Search] Erro na interceptação: ${error.message}`);
       }
     });
 
@@ -3075,49 +3088,93 @@ async function scrapeTikTokShopSearch({ limit = 20 } = {}) {
     const searchUrl = 'https://www.tiktok.com/search?q=tiktok%20shop';
     logger.info(`[TikTok Shop Search] Navegando para: ${searchUrl}`);
     
-    await page.goto(searchUrl, {
-      waitUntil: 'networkidle2',
-      timeout: 60000
-    });
+    try {
+      await page.goto(searchUrl, {
+        waitUntil: 'networkidle2',
+        timeout: 90000 // Aumentado para 90 segundos
+      });
+    } catch (gotoError) {
+      logger.warn(`[TikTok Shop Search] Erro ao navegar (tentando continuar): ${gotoError.message}`);
+      // Tentar continuar mesmo se houver erro
+    }
 
     // Aguardar conteúdo carregar
-    await randomDelay(3000, 5000);
+    await randomDelay(5000, 7000); // Aumentado para dar mais tempo
 
-    // Clicar na aba "Vídeos" se não estiver selecionada
+    // Tentar clicar na aba "Vídeos" se não estiver selecionada
     try {
-      await page.waitForSelector('[data-e2e="search-top-type"]', { timeout: 10000 });
-      const videoTab = await page.$('[data-e2e="search-top-type"]:has-text("Vídeos")');
-      if (videoTab) {
-        await videoTab.click();
-        await randomDelay(2000, 3000);
+      // Aguardar elementos da página carregarem
+      await page.waitForSelector('body', { timeout: 10000 });
+      
+      // Tentar múltiplos seletores para a aba Vídeos
+      const videoTabSelectors = [
+        '[data-e2e="search-top-type"]',
+        'div[class*="Tab"]:has-text("Vídeos")',
+        'button:has-text("Vídeos")',
+        'a[href*="/search"]:has-text("Vídeos")'
+      ];
+      
+      let clicked = false;
+      for (const selector of videoTabSelectors) {
+        try {
+          const element = await page.$(selector);
+          if (element) {
+            await element.click();
+            await randomDelay(2000, 3000);
+            clicked = true;
+            logger.info(`[TikTok Shop Search] Clicou na aba Vídeos usando seletor: ${selector}`);
+            break;
+          }
+        } catch (err) {
+          // Tentar próximo seletor
+          continue;
+        }
+      }
+      
+      if (!clicked) {
+        logger.warn('[TikTok Shop Search] Não foi possível clicar na aba Vídeos, continuando...');
       }
     } catch (err) {
-      logger.warn('[TikTok Shop Search] Não foi possível clicar na aba Vídeos, continuando...');
+      logger.warn(`[TikTok Shop Search] Erro ao tentar clicar na aba Vídeos: ${err.message}. Continuando...`);
     }
 
     // Fazer scroll para carregar mais vídeos
     logger.info('[TikTok Shop Search] Fazendo scroll para carregar vídeos...');
     
-    for (let i = 0; i < 15; i++) {
+    const maxScrolls = 20; // Aumentado de 15 para 20
+    for (let i = 0; i < maxScrolls; i++) {
       try {
         await page.evaluate(() => {
-          window.scrollBy(0, window.innerHeight);
+          window.scrollBy(0, window.innerHeight * 0.8); // Scroll mais suave
         });
-        await randomDelay(1500, 2500);
+        await randomDelay(2000, 3000); // Aumentado para dar mais tempo para APIs carregarem
         
-        if (apiVideos.size >= limit) {
+        // Verificar se já temos vídeos suficientes
+        if (apiVideos.size >= limit * 2) { // Coletar o dobro para ter margem após filtros
           logger.info(`[TikTok Shop Search] Coletados ${apiVideos.size} vídeos, suficiente para o limite de ${limit}`);
           break;
         }
+        
+        // Log a cada 5 scrolls
+        if ((i + 1) % 5 === 0) {
+          logger.info(`[TikTok Shop Search] Scroll ${i + 1}/${maxScrolls} - Vídeos interceptados: ${apiVideos.size}`);
+        }
       } catch (scrollError) {
         logger.warn(`[TikTok Shop Search] Erro no scroll ${i + 1}: ${scrollError.message}`);
+        // Continuar mesmo com erro
       }
     }
 
     // Aguardar um pouco mais para garantir que todas as requisições foram interceptadas
-    await randomDelay(3000, 5000);
+    logger.info(`[TikTok Shop Search] Aguardando requisições finais...`);
+    await randomDelay(5000, 7000); // Aumentado
     
     logger.info(`[TikTok Shop Search] Total de vídeos interceptados da API: ${apiVideos.size}`);
+    
+    // Se não interceptou nenhum vídeo da API, tentar extrair do DOM
+    if (apiVideos.size === 0) {
+      logger.warn(`[TikTok Shop Search] ⚠️ Nenhum vídeo interceptado da API. Tentando extrair do DOM...`);
+    }
 
     // Extrair vídeos do DOM como fallback
     const domVideos = await page.evaluate(() => {
